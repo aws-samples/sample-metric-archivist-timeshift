@@ -1,0 +1,25 @@
+Comment: A state machine for migrating metrics
+StartAt: ProcessMetric
+States:
+  ProcessMetric:
+    Type: Task
+    Resource: ${MigrateMetricFunctionArn}
+    Retry:
+      - ErrorEquals:
+          - States.ALL
+        IntervalSeconds: 2
+        MaxAttempts: 3
+        BackoffRate: 2.0
+    Catch:
+      - ErrorEquals:
+          - States.ALL
+        Next: FailState
+    Next: SuccessState
+
+  SuccessState:
+    Type: Succeed
+
+  FailState:
+    Type: Fail
+    Error: MetricMigrationFailed
+    Cause: Metric migration process failed
