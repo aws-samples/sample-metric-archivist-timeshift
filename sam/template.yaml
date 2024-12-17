@@ -62,139 +62,13 @@ Resources:
       # Enable dead-letter queue for failed migrations
       RedrivePolicy:
         deadLetterTargetArn: !GetAtt MetricMigrationDLQ.Arn
-        maxReceiveCount: 3
+        maxReceiveCount: 1
   # Dead Letter Queue for failed migrations
   MetricMigrationDLQ:
     Type: AWS::SQS::Queue
     Properties:
       QueueName: MetricMigrationDLQ
       MessageRetentionPeriod: 1209600  # 14 days
-  SQSToStepFunctionPipe:
-    Type: AWS::Pipes::Pipe
-    Properties:
-      Name: SQSToStepFunctionPipe
-      RoleArn: !GetAtt PipeRole.Arn
-      Source: !GetAtt MetricMigrationQueue.Arn
-      Target: !Ref MetricMigrationStateMachine
-      TargetParameters:
-        StepFunctionStateMachineParameters:
-          InvocationType: FIRE_AND_FORGET
-      SourceParameters:
-        SqsQueueParameters:
-          BatchSize: 1
-      LogConfiguration:
-        Level: TRACE
-        CloudwatchLogsLogDestination:
-          LogGroupArn: !GetAtt PipeLogGroup.Arn
-  PipeLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: '/aws/pipes/SQSToStepFunctionPipe'
-      RetentionInDays: 14
-  PipeRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: pipes.amazonaws.com
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: SQSAccess
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - sqs:ReceiveMessage
-                  - sqs:DeleteMessage
-                  - sqs:GetQueueAttributes
-                Resource: !GetAtt MetricMigrationQueue.Arn
-        - PolicyName: StepFunctionsAccess
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - states:*
-                Resource: '*'
-        - PolicyName: CloudWatchLogsAccess
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - logs:CreateLogGroup
-                  - logs:CreateLogStream
-                  - logs:PutLogEvents
-                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/pipes/SQSToStepFunctionPipe:*'
-
-  StateMachineLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: '/aws/stepfunctions/MetricMigrationStateMachine'
-      RetentionInDays: 14
-
-  StateMachineLogRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: states.amazonaws.com
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: CloudWatchLogsAccess
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - logs:CreateLogDelivery
-                  - logs:GetLogDelivery
-                  - logs:UpdateLogDelivery
-                  - logs:DeleteLogDelivery
-                  - logs:ListLogDeliveries
-                  - logs:PutLogEvents
-                  - logs:PutResourcePolicy
-                  - logs:DescribeResourcePolicies
-                  - logs:DescribeLogGroups
-                Resource: '*'
-  MetricMigrationStateMachine:
-    Type: AWS::Serverless::StateMachine
-    Properties:
-      Name: MetricMigrationStateMachine
-      Type: STANDARD
-      DefinitionUri: statemachines/metric_migration.asl.yaml
-      DefinitionSubstitutions:
-        MigrateMetricFunctionArn: !GetAtt MigrateMetricFunction.Arn
-      Policies:
-        - CloudWatchLogsFullAccess
-        - Version: '2012-10-17'
-          Statement:
-            - Effect: Allow
-              Action:
-                - dynamodb:GetItem
-                - dynamodb:PutItem
-                - dynamodb:UpdateItem
-                - dynamodb:DeleteItem
-              Resource: '*'  # You should restrict this to specific tables
-        - Version: '2012-10-17'
-          Statement:
-            - Effect: Allow
-              Action:
-                - lambda:InvokeFunction
-              Resource: !GetAtt MigrateMetricFunction.Arn
-      Logging:
-        Destinations:
-          - CloudWatchLogsLogGroup:
-              LogGroupArn: !GetAtt StateMachineLogGroup.Arn
-        IncludeExecutionData: true
-        Level: ALL
   MigrateMetricFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -203,9 +77,20 @@ Resources:
       Runtime: python3.13
       Architectures:
         - x86_64
+      Events:
+        SQSEvent:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt MetricMigrationQueue.Arn
+            BatchSize: 1
+            FunctionResponseTypes:
+              - ReportBatchItemFailures
       Timeout: 300  # 5 minutes
       MemorySize: 256
       Policies:
+        - SQSPollerPolicy:
+            QueueName: !GetAtt MetricMigrationQueue.QueueName
+        - CloudWatchLogsFullAccess
         - DynamoDBCrudPolicy:
             TableName: '*'  # Restrict to specific tables in production
         - CloudWatchPutMetricPolicy: {}

@@ -1,0 +1,12 @@
+{
+  "namespace": "AWS/Lambda",
+  "metricName": "Invocations",
+  "dimensions": [
+    {
+      "Name": "FunctionName",
+      "Value": "sam-MetricMigrationTrigger-kzqLVgmTH3DK"
+    }
+  ],
+  "startTime": "2024-12-17T00:00:00Z",
+  "endTime": "2024-12-18T00:00:00Z"
+}

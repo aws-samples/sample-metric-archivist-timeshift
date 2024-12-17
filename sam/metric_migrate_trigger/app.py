@@ -58,7 +58,7 @@ def lambda_handler(event, context):
         
         # Write the request to an SQS queue
         sqs_client = boto3.client('sqs')
-        queue_url = os.environ['MIGRATION_QUEUE_URL'] # Replace with your SQS queue URL
+        queue_url = os.environ['MIGRATION_QUEUE_URL'] 
         sqs_client.send_message(QueueUrl=queue_url, MessageBody=json.dumps(body))
         logger.info(f"Request sent to SQS: {json.dumps(body)}")
 

@@ -14,16 +14,13 @@ read -r -d '' PAYLOAD <<EOF
   "dimensions": [
     {
       "Name": "FunctionName",
-      "Value": "MyTestFunction"
+      "Value": "sam-MigrateMetricFunction-9TbhGLeM4rUl"
     }
   ],
-  "startTime": "2024-01-01T00:00:00Z",
-  "endTime": "2024-01-02T00:00:00Z"
+  "startTime": "2024-12-17T00:00:00Z",
+  "endTime": "2024-12-18T00:00:00Z"
 }
 EOF
-
-echo ${API_URL}
-echo ${PAYLOAD}
 
 # Make the API call
 curl -X POST "${API_URL}" \

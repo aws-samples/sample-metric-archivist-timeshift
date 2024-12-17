@@ -1,72 +1,83 @@
 import json
-
+import os
 import pytest
+import sam.migrate_metric.app as app
 
-from hello_world import app
-
-
-@pytest.fixture()
-def apigw_event():
-    """ Generates API GW Event"""
-
-    return {
-        "body": '{ "test": "body"}',
-        "resource": "/{proxy+}",
-        "requestContext": {
-            "resourceId": "123456",
-            "apiId": "1234567890",
-            "resourcePath": "/{proxy+}",
-            "httpMethod": "POST",
-            "requestId": "c6af9ac6-7b61-11e6-9a41-93e8deadbeef",
-            "accountId": "123456789012",
-            "identity": {
-                "apiKey": "",
-                "userArn": "",
-                "cognitoAuthenticationType": "",
-                "caller": "",
-                "userAgent": "Custom User Agent String",
-                "user": "",
-                "cognitoIdentityPoolId": "",
-                "cognitoIdentityId": "",
-                "cognitoAuthenticationProvider": "",
-                "sourceIp": "127.0.0.1",
-                "accountId": "",
-            },
-            "stage": "prod",
-        },
-        "queryStringParameters": {"foo": "bar"},
-        "headers": {
-            "Via": "1.1 08f323deadbeefa7af34d5feb414ce27.cloudfront.net (CloudFront)",
-            "Accept-Language": "en-US,en;q=0.8",
-            "CloudFront-Is-Desktop-Viewer": "true",
-            "CloudFront-Is-SmartTV-Viewer": "false",
-            "CloudFront-Is-Mobile-Viewer": "false",
-            "X-Forwarded-For": "127.0.0.1, 127.0.0.2",
-            "CloudFront-Viewer-Country": "US",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-            "Upgrade-Insecure-Requests": "1",
-            "X-Forwarded-Port": "443",
-            "Host": "1234567890.execute-api.us-east-1.amazonaws.com",
-            "X-Forwarded-Proto": "https",
-            "X-Amz-Cf-Id": "aaaaaaaaaae3VYQb9jd-nvCd-de396Uhbp027Y2JvkCPNLmGJHqlaA==",
-            "CloudFront-Is-Tablet-Viewer": "false",
-            "Cache-Control": "max-age=0",
-            "User-Agent": "Custom User Agent String",
-            "CloudFront-Forwarded-Proto": "https",
-            "Accept-Encoding": "gzip, deflate, sdch",
-        },
-        "pathParameters": {"proxy": "/examplepath"},
-        "httpMethod": "POST",
-        "stageVariables": {"baz": "qux"},
-        "path": "/examplepath",
-    }
+@pytest.fixture
+def fail_400_events_directory():
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    events_dir = os.path.join(current_dir, 'events/fail_400')
+    if not os.path.exists(events_dir):
+        pytest.skip("Events directory not found")
+    else:
+        print(f"Events directory: {events_dir}")
+    return events_dir
 
 
-def test_lambda_handler(apigw_event):
+@pytest.fixture
+def success_events_directory():
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    events_dir = os.path.join(current_dir, 'events/success')
+    if not os.path.exists(events_dir):
+        pytest.skip("Events directory not found")
+    else:
+        print(f"Events directory: {events_dir}")
+    return events_dir
 
-    ret = app.lambda_handler(apigw_event, "")
-    data = json.loads(ret["body"])
+def test_success_events_return_200(success_events_directory):
+    event_files = [f for f in os.listdir(success_events_directory) if f.endswith('.json')]
+    
+    if not event_files:
+        pytest.skip("No event files found in events directory")
+    
+    for filename in event_files:
+        event_path = os.path.join(success_events_directory, filename)
+        
+        try:
+            with open(success_events_directory + '/../sqs-skeleton.json', 'r') as f:
+                skeleton = json.load(f)
+            with open(event_path, 'r') as f:
+                fileStr = f.read()
+                body = json.loads(fileStr)
+                skeleton['Records'][0]['body'] = json.dumps(body)
+                event = skeleton
+        except json.JSONDecodeError as e:
+            pytest.fail(f"Invalid JSON in {filename}: {str(e)}")
+        except Exception as e:
+            pytest.fail(f"Error reading {filename}: {str(e)}")
+            
+        try:
+            response = app.lambda_handler(event, {})
+            assert isinstance(response, dict), f"Event {filename}: Response should be a dictionary"
+            assert len(response['batchItemFailures']) == 0, f"batchItemFailures are unexpectedly present."
+        except Exception as e:
+            pytest.fail(f"Handler failed for {filename}: {str(e)}")
 
-    assert ret["statusCode"] == 200
-    assert "message" in ret["body"]
-    assert data["message"] == "hello world"
+def test_fail_400_events_return_400(fail_400_events_directory):
+    event_files = [f for f in os.listdir(fail_400_events_directory) if f.endswith('.json')]
+    
+    if not event_files:
+        pytest.skip("No event files found in events directory")
+    
+    for filename in event_files:
+        event_path = os.path.join(fail_400_events_directory, filename)
+        
+        try:
+            with open(fail_400_events_directory + '/../sqs-skeleton.json', 'r') as f:
+                skeleton = json.load(f)
+            with open(event_path, 'r') as f:
+                fileStr = f.read()
+                body = json.loads(fileStr)
+                skeleton['Records'][0]['body'] = json.dumps(body)
+                event = skeleton
+        except json.JSONDecodeError as e:
+            pytest.fail(f"Invalid JSON in {filename}: {str(e)}")
+        except Exception as e:
+            pytest.fail(f"Error reading {filename}: {str(e)}")
+            
+        try:
+            response = app.lambda_handler(event, {})
+            assert isinstance(response, dict), f"Event {filename}: Response should be a dictionary"
+            assert len(response['batchItemFailures']) == 1, f"batchItemFailures is unexpectedly missing."
+        except Exception as e:
+            pytest.fail(f"Handler failed for {filename}: {str(e)}")

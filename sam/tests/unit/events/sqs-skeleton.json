@@ -1,0 +1,21 @@
+{
+    "Records": [
+      {
+        "messageId": "74bfd050-f7d4-4dda-8190-9d697e694af5",
+        "receiptHandle": "AQEBo+qtPBsgB9dPNQ4fk3WsyDiU3s+fJ53KouquwabUqjYMZz3+I1m5XGAt3WnAmWreunl6iOOobzlAKKlo5JuumSvTyqExsiKXHEP3jh+y3V7lZ5llTvVQbminjpT7PYI/a2UYnFD9tPWRQDQ8XaSC3IjhV+ZCtH19JMp/5G1rxzANxlHX1JRGimz07Xu6bSIBZsBGp+ge9FShGm3VyLCw8CmLiM3XeukDn3JggJAskzgCsL0G4yGxIu9OP1zxsdAROeVk7GutDN2rhmaQoO2AijbgsJgRi5rnFCPCuSxrxaTzw7x3+uJPH+0QqxpFPQBDjE2riSwE4SZ28jDW5oh2pS47foyhvsR73LJAVqj356WLID8/x4VxyQD9PiZNVD2dkXxOh3u9xyl6bcJSkNXvzA==",
+        "body": {},
+        "attributes": {
+          "ApproximateReceiveCount": "1",
+          "AWSTraceHeader": "Root=1-6761be4d-3b269a313bd6237c334b1c3b;Parent=09a8d8db4edfa4a4;Sampled=1;Lineage=1:07e989b3:0",
+          "SentTimestamp": "1734458961067",
+          "SenderId": "AROARHQBNWGUHNMMFYVTO:sam-MetricMigrationTrigger-kzqLVgmTH3DK",
+          "ApproximateFirstReceiveTimestamp": "1734458961072"
+        },
+        "messageAttributes": {},
+        "md5OfBody": "7b38a178fd326db19721a231709d842c",
+        "eventSource": "aws:sqs",
+        "eventSourceARN": "arn:aws:sqs:us-east-2:084828598696:MetricMigrationQueue",
+        "awsRegion": "us-east-2"
+      }
+    ]
+  }
