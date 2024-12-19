@@ -16,6 +16,7 @@ Globals:
   Api:
     TracingEnabled: true
 Resources:
+  # amazonq-ignore-next-line
   MetricMigrationTrigger:
     Type: AWS::Serverless::Function
     Properties:
@@ -48,12 +49,17 @@ Resources:
       RedrivePolicy:
         deadLetterTargetArn: !GetAtt MetricMigrationDLQ.Arn
         maxReceiveCount: 1
+    UpdateReplacePolicy: Retain
+    DeletionPolicy: Retain
   # Dead Letter Queue for failed migrations
   MetricMigrationDLQ:
     Type: AWS::SQS::Queue
     Properties:
       QueueName: MetricMigrationDLQ
       MessageRetentionPeriod: 1209600  # 14 days
+    UpdateReplacePolicy: Retain
+    DeletionPolicy: Retain
+  # amazonq-ignore-next-line
   MigrateMetricFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -85,10 +91,94 @@ Resources:
               Action:
                 - cloudwatch:*
               Resource: '*'  # You should restrict this to specific tables
+  MetricsTableBucket:
+    # amazonq-ignore-next-line
+    Type: AWS::S3Tables::TableBucket
+    Properties:
+      TableBucketName: !Sub 'metrics-table-bucket-${AWS::AccountId}'  # This ensures uniqueness
+      UnreferencedFileRemoval:
+        Status: Enabled
+        NoncurrentDays: 7
+        UnreferencedDays: 7
+    UpdateReplacePolicy: Retain
+    DeletionPolicy: Retain
+  MetricsFirehoseRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: firehose.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: S3TableAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+            - Sid: S3TableAccessViaGlueFederation
+              Effect: Allow
+              Action:
+              - glue:GetTable
+              - glue:GetDatabase
+              - glue:UpdateTable
+              Resource:
+              - !Sub 'arn:aws:glue:${AWS::Region}:${AWS::AccountId}:catalog/s3tablescatalog/*'
+              - !Sub 'arn:aws:glue:${AWS::Region}:${AWS::AccountId}:catalog/s3tablescatalog'
+              - !Sub 'arn:aws:glue:${AWS::Region}:${AWS::AccountId}:catalog'
+              - !Sub 'arn:aws:glue:${AWS::Region}:${AWS::AccountId}:database/*'
+              - !Sub 'arn:aws:glue:${AWS::Region}:${AWS::AccountId}:table/*/*'
+            - Sid: S3DeliveryErrorBucketPermission
+              Effect: Allow
+              Action:
+              - s3:AbortMultipartUpload
+              - s3:GetBucketLocation
+              - s3:GetObject
+              - s3:ListBucket
+              - s3:ListBucketMultipartUploads
+              - s3:PutObject
+              Resource:
+              - !GetAtt MetricFirehoseErrorBucket.Arn
+              - !Sub '${MetricFirehoseErrorBucket.Arn}/*'
+            - Sid: RequiredWhenDoingMetadataReadsANDDataAndMetadataWriteViaLakeformation
+              Effect: Allow
+              Action:
+              - lakeformation:GetDataAccess
+              Resource: "*"
+            - Sid: LoggingInCloudWatch
+              Effect: Allow
+              Action:
+              - logs:PutLogEvents
+              Resource:
+              - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:!Ref MetricFirehoseLogGroup:log-stream:*'
+  MetricFirehoseLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: MetricFirehoseForS3TableBucket
+      RetentionInDays: 14
+    UpdateReplacePolicy: Retain
+    DeletionPolicy: Retain
+  # amazonq-ignore-next-line
+  MetricFirehoseErrorBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'metric-firehose-errors-${AWS::AccountId}'
+      LifecycleConfiguration:
+        Rules:
+          - Id: ErrorLogRetention
+            Status: Enabled
+            ExpirationInDays: 90  # Adjust retention period as needed
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+    UpdateReplacePolicy: Retain
+    DeletionPolicy: Retain
 Outputs:
-  # ServerlessRestApi is an implicit API created out of Events key under Serverless::Function
-  # Find out more about other implicit resources you can reference within SAM
-  # https://github.com/awslabs/serverless-application-model/blob/master/docs/internals/generated_resources.rst#api
   MetricMigrationQueueUrl:
     Description: URL of the Metric Migration Queue
     Value: !Ref MetricMigrationQueue
@@ -98,3 +188,7 @@ Outputs:
   MetricMigrationTriggerApi:
     Description: API Gateway endpoint URL for the metric migration trigger
     Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/migrate"
+  MetricsTableBucketArn:
+      Description: ARN of the Metrics Table Bucket
+      # amazonq-ignore-next-line
+      Value: !GetAtt MetricsTableBucket.TableBucketARN
