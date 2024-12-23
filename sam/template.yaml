@@ -178,6 +178,66 @@ Resources:
         Status: Enabled
     UpdateReplacePolicy: Retain
     DeletionPolicy: Retain
+  SetupS3TableBucketsSetupFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: setup_s3_table_buckets/
+      Handler: app.lambda_handler
+      Runtime: python3.9
+      Timeout: 300
+      Policies:
+        - Statement:
+          - Effect: Allow
+            Action:
+              - 'glue:CreateNamespace'
+              - 'glue:DeleteNamespace'
+              - 'glue:GetNamespace'
+              - 'glue:*' # TODO Narrow this scope.
+            Resource: '*'
+          - Effect: Allow
+            Action:
+              - 's3tables:CreateNamespace'
+              - 's3tables:DeleteNamespace'
+              - 's3tables:GetNamespace'
+              - 's3tables:CreateTable'
+              - 's3tables:DeleteTable'
+              - 's3tables:GetTableMetadataLocation'
+            Resource: '*' # TODO Narrow this scope.
+          - Effect: Allow
+            Action:
+              - 'athena:*' # TODO Narrow this scope.
+            Resource: '*' # TODO Narrow this scope.
+
+  SetupS3TableBucketsCustom:
+    Type: Custom::SetupS3TableBuckets
+    Properties:
+      ServiceToken: !GetAtt SetupS3TableBucketsSetupFunction.Arn
+      ServiceTimeout: 30
+      # amazonq-ignore-next-line
+      TableBucketArn: !GetAtt MetricsTableBucket.TableBucketARN
+      TableBucketName: !Sub 'metrics-table-bucket-${AWS::AccountId}'
+      Namespace: retained_metrics
+      TableName: retained_metrics
+      AccountNumber: ${AWS::AccountId}
+      TempS3Path: !Sub 's3://${TemporarySetupBucket}/'
+      Region: ${AWS::Region}
+  # amazonq-ignore-next-line
+  TemporarySetupBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'metric-archivist-setup-${AWS::AccountId}'
+      LifecycleConfiguration:
+        Rules:
+          - Id: SetupRetention
+            Status: Enabled
+            ExpirationInDays: 30  # Adjust retention period as needed
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
 Outputs:
   MetricMigrationQueueUrl:
     Description: URL of the Metric Migration Queue
