@@ -94,6 +94,10 @@ Resources:
           - Fn::ImportValue: PrivateSubnetAId
           - Fn::ImportValue: PrivateSubnetBId
           - Fn::ImportValue: PrivateSubnetCId
+      Environment:
+        Variables:
+          DB_HOST: !GetAtt MetricsDatabaseProxy.Endpoint
+          DB_SECRET_NAME: !Ref MetricsDatabaseArchivistUserSecret
   LambdaSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -124,7 +128,6 @@ Resources:
         MaxIdleConnectionsPercent: 50
         ConnectionBorrowTimeout: 120
     DependsOn: MetricsDatabaseProxy
-  
   MetricsDatabaseSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
@@ -138,6 +141,14 @@ Resources:
     Properties:
       GenerateSecretString:
         SecretStringTemplate: '{"username": "dbadmin"}'
+        GenerateStringKey: "password"
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\'
+  MetricsDatabaseArchivistUserSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "archivist"}'
         GenerateStringKey: "password"
         PasswordLength: 32
         ExcludeCharacters: '"@/\'
