@@ -81,28 +81,111 @@ Resources:
       Policies:
         - SQSPollerPolicy:
             QueueName: !GetAtt MetricMigrationQueue.QueueName
-        - CloudWatchLogsFullAccess
-        - DynamoDBCrudPolicy:
-            TableName: '*'  # Restrict to specific tables in production
-        - CloudWatchPutMetricPolicy: {}
-        - Version: '2012-10-17'
-          Statement:
-            - Effect: Allow
-              Action:
-                - cloudwatch:*
-              Resource: '*'  # You should restrict this to specific tables
-  MetricsTableBucket:
-    # amazonq-ignore-next-line
-    Type: AWS::S3Tables::TableBucket
+        - AWSLambdaBasicExecutionRole
+        - Statement:
+          - Effect: Allow
+            Action:
+              - cloudwatch:*
+            Resource: '*'
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref LambdaSecurityGroup
+        SubnetIds:
+          - Fn::ImportValue: PrivateSubnetAId
+          - Fn::ImportValue: PrivateSubnetBId
+          - Fn::ImportValue: PrivateSubnetCId
+  LambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
     Properties:
-      TableBucketName: !Sub 'metrics-table-bucket-${AWS::AccountId}'  # This ensures uniqueness
-      UnreferencedFileRemoval:
-        Status: Enabled
-        NoncurrentDays: 7
-        UnreferencedDays: 7
-    UpdateReplacePolicy: Retain
-    DeletionPolicy: Retain
-  MetricsFirehoseRole:
+      GroupDescription: Security group for Lambda functions
+      VpcId: 
+        Fn::ImportValue: VpcId
+  MetricsDatabaseSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Metrics Database
+      VpcId: 
+        Fn::ImportValue: VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          SourceSecurityGroupId: !Ref ProxySecurityGroup
+    # Create a default target group for the proxy
+  MetricsDatabaseProxyTargetGroup:
+    Type: AWS::RDS::DBProxyTargetGroup
+    Properties:
+      DBProxyName: !Ref MetricsDatabaseProxy
+      TargetGroupName: default
+      DBClusterIdentifiers: 
+        - !Ref MetricsDatabase
+      ConnectionPoolConfigurationInfo:
+        MaxConnectionsPercent: 100
+        MaxIdleConnectionsPercent: 50
+        ConnectionBorrowTimeout: 120
+    DependsOn: MetricsDatabaseProxy
+  
+  MetricsDatabaseSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Subnet group for Metrics Database
+      SubnetIds: 
+        - Fn::ImportValue: PrivateSubnetAId
+        - Fn::ImportValue: PrivateSubnetBId
+        - Fn::ImportValue: PrivateSubnetCId
+  MetricsDatabaseSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "dbadmin"}'
+        GenerateStringKey: "password"
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\'
+  MetricsDatabase:
+    Type: AWS::RDS::DBCluster
+    Properties:
+      Engine: aurora-postgresql
+      EngineVersion: 15.3
+      DatabaseName: metrics
+      MasterUsername: !Sub '{{resolve:secretsmanager:${MetricsDatabaseSecret}:SecretString:username}}'
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${MetricsDatabaseSecret}:SecretString:password}}'
+      ServerlessV2ScalingConfiguration:
+        MinCapacity: 1  # Minimum ACU (Aurora Capacity Units)
+        MaxCapacity: 16   # Maximum ACU
+      VpcSecurityGroupIds: 
+        - !Ref MetricsDatabaseSecurityGroup
+      DBSubnetGroupName: !Ref MetricsDatabaseSubnetGroup
+      Port: 5432
+      EnableHttpEndpoint: true  # Enables Data API
+      DeletionProtection: true
+  MetricsDatabaseDefaultInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      Engine: aurora-postgresql
+      DBInstanceClass: db.serverless
+      DBClusterIdentifier: !Ref MetricsDatabase
+      MonitoringInterval: 0
+
+  MetricsDatabaseProxy:
+    Type: AWS::RDS::DBProxy
+    Properties:
+      DBProxyName: !Sub ${AWS::StackName}-metrics-proxy
+      EngineFamily: POSTGRESQL
+      RoleArn: !GetAtt MetricsDatabaseProxyRole.Arn
+      Auth:
+        - AuthScheme: SECRETS
+          SecretArn: !Ref MetricsDatabaseSecret
+          IAMAuth: DISABLED
+      VpcSubnetIds:
+        - Fn::ImportValue: PrivateSubnetAId
+        - Fn::ImportValue: PrivateSubnetBId
+        - Fn::ImportValue: PrivateSubnetCId
+      VpcSecurityGroupIds:
+        - !Ref ProxySecurityGroup
+      RequireTLS: true
+      IdleClientTimeout: 1800
+      DebugLogging: false
+  MetricsDatabaseProxyRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
@@ -110,134 +193,28 @@ Resources:
         Statement:
           - Effect: Allow
             Principal:
-              Service: firehose.amazonaws.com
+              Service: rds.amazonaws.com
             Action: sts:AssumeRole
       Policies:
-        - PolicyName: S3TableAccess
+        - PolicyName: ProxySecretAccess
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
-            - Sid: S3TableAccessViaGlueFederation
-              Effect: Allow
-              Action:
-              - glue:GetTable
-              - glue:GetDatabase
-              - glue:UpdateTable
-              Resource:
-              - !Sub 'arn:aws:glue:${AWS::Region}:${AWS::AccountId}:catalog/s3tablescatalog/*'
-              - !Sub 'arn:aws:glue:${AWS::Region}:${AWS::AccountId}:catalog/s3tablescatalog'
-              - !Sub 'arn:aws:glue:${AWS::Region}:${AWS::AccountId}:catalog'
-              - !Sub 'arn:aws:glue:${AWS::Region}:${AWS::AccountId}:database/*'
-              - !Sub 'arn:aws:glue:${AWS::Region}:${AWS::AccountId}:table/*/*'
-            - Sid: S3DeliveryErrorBucketPermission
-              Effect: Allow
-              Action:
-              - s3:AbortMultipartUpload
-              - s3:GetBucketLocation
-              - s3:GetObject
-              - s3:ListBucket
-              - s3:ListBucketMultipartUploads
-              - s3:PutObject
-              Resource:
-              - !GetAtt MetricFirehoseErrorBucket.Arn
-              - !Sub '${MetricFirehoseErrorBucket.Arn}/*'
-            - Sid: RequiredWhenDoingMetadataReadsANDDataAndMetadataWriteViaLakeformation
-              Effect: Allow
-              Action:
-              - lakeformation:GetDataAccess
-              Resource: "*"
-            - Sid: LoggingInCloudWatch
-              Effect: Allow
-              Action:
-              - logs:PutLogEvents
-              Resource:
-              - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:!Ref MetricFirehoseLogGroup:log-stream:*'
-  MetricFirehoseLogGroup:
-    Type: AWS::Logs::LogGroup
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource: !Ref MetricsDatabaseSecret
+  ProxySecurityGroup:
+    Type: AWS::EC2::SecurityGroup
     Properties:
-      LogGroupName: MetricFirehoseForS3TableBucket
-      RetentionInDays: 14
-    UpdateReplacePolicy: Retain
-    DeletionPolicy: Retain
-  # amazonq-ignore-next-line
-  MetricFirehoseErrorBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub 'metric-firehose-errors-${AWS::AccountId}'
-      LifecycleConfiguration:
-        Rules:
-          - Id: ErrorLogRetention
-            Status: Enabled
-            ExpirationInDays: 90  # Adjust retention period as needed
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      VersioningConfiguration:
-        Status: Enabled
-    UpdateReplacePolicy: Retain
-    DeletionPolicy: Retain
-  SetupS3TableBucketsSetupFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: setup_s3_table_buckets/
-      Handler: app.lambda_handler
-      Runtime: python3.9
-      Timeout: 300
-      Policies:
-        - Statement:
-          - Effect: Allow
-            Action:
-              - 'glue:CreateNamespace'
-              - 'glue:DeleteNamespace'
-              - 'glue:GetNamespace'
-              - 'glue:*' # TODO Narrow this scope.
-            Resource: '*'
-          - Effect: Allow
-            Action:
-              - 's3tables:CreateNamespace'
-              - 's3tables:DeleteNamespace'
-              - 's3tables:GetNamespace'
-              - 's3tables:CreateTable'
-              - 's3tables:DeleteTable'
-              - 's3tables:GetTableMetadataLocation'
-            Resource: '*' # TODO Narrow this scope.
-          - Effect: Allow
-            Action:
-              - 'athena:*' # TODO Narrow this scope.
-            Resource: '*' # TODO Narrow this scope.
-
-  SetupS3TableBucketsCustom:
-    Type: Custom::SetupS3TableBuckets
-    Properties:
-      ServiceToken: !GetAtt SetupS3TableBucketsSetupFunction.Arn
-      ServiceTimeout: 30
-      # amazonq-ignore-next-line
-      TableBucketArn: !GetAtt MetricsTableBucket.TableBucketARN
-      TableBucketName: !Sub 'metrics-table-bucket-${AWS::AccountId}'
-      Namespace: retained_metrics
-      TableName: retained_metrics
-      AccountNumber: ${AWS::AccountId}
-      TempS3Path: !Sub 's3://${TemporarySetupBucket}/'
-      Region: ${AWS::Region}
-  # amazonq-ignore-next-line
-  TemporarySetupBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub 'metric-archivist-setup-${AWS::AccountId}'
-      LifecycleConfiguration:
-        Rules:
-          - Id: SetupRetention
-            Status: Enabled
-            ExpirationInDays: 30  # Adjust retention period as needed
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      VersioningConfiguration:
-        Status: Enabled
+      GroupDescription: Security group for RDS Proxy
+      VpcId: 
+        Fn::ImportValue: VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          SourceSecurityGroupId: !Ref LambdaSecurityGroup
 Outputs:
   MetricMigrationQueueUrl:
     Description: URL of the Metric Migration Queue
@@ -248,7 +225,3 @@ Outputs:
   MetricMigrationTriggerApi:
     Description: API Gateway endpoint URL for the metric migration trigger
     Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/migrate"
-  MetricsTableBucketArn:
-      Description: ARN of the Metrics Table Bucket
-      # amazonq-ignore-next-line
-      Value: !GetAtt MetricsTableBucket.TableBucketARN
