@@ -5,9 +5,15 @@ Description: >
 
   Sample SAM Template for sam
 Parameters:
-  LatestAmiId:
-    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
-    Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
+    DataSourceCodeBucket:
+        Description: S3 Bucket containing the data source connector code
+        Type: String
+    DataSourceCodeKey:
+        Description: S3 key of the data source connector code
+        Type: String
+    DataSourceName:
+        Description: Data source name
+        Type: String
 
 # More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
 Globals:
@@ -91,6 +97,8 @@ Resources:
             Action:
               - cloudwatch:*
             Resource: '*'
+        - S3CrudPolicy:
+            BucketName: !Ref ArchivedMetricsS3Bucket
       VpcConfig:
         SecurityGroupIds:
           - !Ref LambdaSecurityGroup
@@ -98,196 +106,101 @@ Resources:
           - Fn::ImportValue: PrivateSubnetAId
           - Fn::ImportValue: PrivateSubnetBId
           - Fn::ImportValue: PrivateSubnetCId
-      Environment:
-        Variables:
-          DB_HOST: !GetAtt MetricsDatabaseProxy.Endpoint
-          DB_SECRET_NAME: !Ref MetricsDatabaseArchivistUserSecret
   LambdaSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: Security group for Lambda functions
       VpcId: 
         Fn::ImportValue: VpcId
-  MetricsDatabaseSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
+  ArchivedMetricsS3Bucket:
+    Type: AWS::S3::Bucket
     Properties:
-      GroupDescription: Security group for Metrics Database
-      VpcId: 
-        Fn::ImportValue: VpcId
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 5432
-          ToPort: 5432
-          SourceSecurityGroupId: !Ref ProxySecurityGroup
-        - IpProtocol: tcp
-          FromPort: 5432
-          ToPort: 5432
-          SourceSecurityGroupId: !Ref BastionSecurityGroup
-    # Create a default target group for the proxy
-  MetricsDatabaseProxyTargetGroup:
-    Type: AWS::RDS::DBProxyTargetGroup
-    Properties:
-      DBProxyName: !Ref MetricsDatabaseProxy
-      TargetGroupName: default
-      DBClusterIdentifiers: 
-        - !Ref MetricsDatabase
-      ConnectionPoolConfigurationInfo:
-        MaxConnectionsPercent: 100
-        MaxIdleConnectionsPercent: 50
-        ConnectionBorrowTimeout: 120
-    DependsOn: MetricsDatabaseProxy
-  MetricsDatabaseSubnetGroup:
-    Type: AWS::RDS::DBSubnetGroup
-    Properties:
-      DBSubnetGroupDescription: Subnet group for Metrics Database
-      SubnetIds: 
-        - Fn::ImportValue: PrivateSubnetAId
-        - Fn::ImportValue: PrivateSubnetBId
-        - Fn::ImportValue: PrivateSubnetCId
-  MetricsDatabaseSecret:
-    Type: AWS::SecretsManager::Secret
-    Properties:
-      GenerateSecretString:
-        SecretStringTemplate: '{"username": "dbadmin"}'
-        GenerateStringKey: "password"
-        PasswordLength: 32
-        ExcludeCharacters: '"@/\'
-  MetricsDatabaseArchivistUserSecret:
-    Type: AWS::SecretsManager::Secret
-    Properties:
-      GenerateSecretString:
-        SecretStringTemplate: '{"username": "archivist"}'
-        GenerateStringKey: "password"
-        PasswordLength: 32
-        ExcludeCharacters: '"@/\'
-  MetricsDatabase:
-    Type: AWS::RDS::DBCluster
-    Properties:
-      Engine: aurora-postgresql
-      EngineVersion: 15.3
-      DatabaseName: metrics
-      MasterUsername: !Sub '{{resolve:secretsmanager:${MetricsDatabaseSecret}:SecretString:username}}'
-      MasterUserPassword: !Sub '{{resolve:secretsmanager:${MetricsDatabaseSecret}:SecretString:password}}'
-      ServerlessV2ScalingConfiguration:
-        MinCapacity: 1  # Minimum ACU (Aurora Capacity Units)
-        MaxCapacity: 16   # Maximum ACU
-      VpcSecurityGroupIds: 
-        - !Ref MetricsDatabaseSecurityGroup
-      DBSubnetGroupName: !Ref MetricsDatabaseSubnetGroup
-      Port: 5432
-      EnableHttpEndpoint: true  # Enables Data API
-      DeletionProtection: true
-  MetricsDatabaseDefaultInstance:
-    Type: AWS::RDS::DBInstance
-    Properties:
-      Engine: aurora-postgresql
-      DBInstanceClass: db.serverless
-      DBClusterIdentifier: !Ref MetricsDatabase
-      MonitoringInterval: 0
-  MetricsDatabaseProxy:
-    Type: AWS::RDS::DBProxy
-    Properties:
-      DBProxyName: !Sub ${AWS::StackName}-metrics-proxy
-      EngineFamily: POSTGRESQL
-      RoleArn: !GetAtt MetricsDatabaseProxyRole.Arn
-      Auth:
-        - AuthScheme: SECRETS
-          SecretArn: !Ref MetricsDatabaseSecret
-          IAMAuth: DISABLED
-      VpcSubnetIds:
-        - Fn::ImportValue: PrivateSubnetAId
-        - Fn::ImportValue: PrivateSubnetBId
-        - Fn::ImportValue: PrivateSubnetCId
-      VpcSecurityGroupIds:
-        - !Ref ProxySecurityGroup
-      RequireTLS: true
-      IdleClientTimeout: 1800
-      DebugLogging: false
-  MetricsDatabaseProxyRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: rds.amazonaws.com
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: ProxySecretAccess
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - secretsmanager:GetSecretValue
-                Resource: !Ref MetricsDatabaseSecret
-  ProxySecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: Security group for RDS Proxy
-      VpcId: 
-        Fn::ImportValue: VpcId
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 5432
-          ToPort: 5432
-          SourceSecurityGroupId: !Ref LambdaSecurityGroup
-        - IpProtocol: tcp
-          FromPort: 5432
-          ToPort: 5432
-          SourceSecurityGroupId: !Ref BastionSecurityGroup
-  BastionSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: Security group for Bastion Host
-      VpcId: 
-        Fn::ImportValue: VpcId
-      SecurityGroupEgress:
-        - IpProtocol: -1
-          FromPort: -1
-          ToPort: -1
-          CidrIp: 0.0.0.0/0
-  BastionInstance:
-    Type: AWS::EC2::Instance
-    Properties:
-      ImageId: !Ref LatestAmiId
-      InstanceType: t3.micro
-      SubnetId: 
-        Fn::ImportValue: PublicSubnetAId
-      SecurityGroupIds:
-        - !Ref BastionSecurityGroup
-      IamInstanceProfile: !Ref BastionInstanceProfile
-      Tags:
-        - Key: Name
-          Value: !Sub ${AWS::StackName}-bastion
-      UserData:
-        Fn::Base64: !Sub |
-          #!/bin/bash
-          yum update -y
-          yum install -y postgresql15
-          yum install -y https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/linux_amd64/amazon-ssm-agent.rpm
-          systemctl enable amazon-ssm-agent
-          systemctl start amazon-ssm-agent
-  BastionInstanceRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: ec2.amazonaws.com
-            Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
-        - arn:aws:iam::aws:policy/AmazonSSMFullAccess
-  BastionInstanceProfile:
-    Type: AWS::IAM::InstanceProfile
-    Properties:
-      Path: /
-      Roles:
-        - !Ref BastionInstanceRole
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+    UpdateReplacePolicy: Retain
+    DeletionPolicy: Retain
+  S3CloudWatchDataSourceLambda:
+      Type: AWS::Lambda::Function
+      Properties:
+          FunctionName:
+              Ref: DataSourceName
+          Runtime: nodejs18.x
+          Handler: index.handler
+          Role:
+              Fn::GetAtt: S3CloudWatchDataSourceLambdaRole.Arn
+          Code:
+              S3Bucket:
+                  Ref: DataSourceCodeBucket
+              S3Key:
+                  Ref: DataSourceCodeKey
+          Timeout: 30
+          Tags:
+              - Key: cloudwatch:datasource
+                Value: s3
+  S3CloudWatchDataSourceLambdaPermission:
+      Type: AWS::Lambda::Permission
+      Properties:
+          Action: lambda:InvokeFunction
+          FunctionName:
+              Ref: S3CloudWatchDataSourceLambda
+          Principal: lambda.datasource.cloudwatch.amazonaws.com
+          SourceAccount:
+              Ref: AWS::AccountId
+  S3CloudWatchDataSourceLambdaRole:
+      Type: AWS::IAM::Role
+      Properties:
+          AssumeRolePolicyDocument:
+              Version: 2012-10-17
+              Statement:
+                  - Action:
+                        - sts:AssumeRole
+                    Effect: Allow
+                    Principal:
+                        Service:
+                            - lambda.amazonaws.com
+          Policies:
+              - PolicyName: LambdaLoggingPolicy
+                PolicyDocument:
+                    Version: 2012-10-17
+                    Statement:
+                        - Action:
+                              - logs:CreateLogGroup
+                              - logs:CreateLogStream
+                              - logs:PutLogEvents
+                          Effect: Allow
+                          Resource:
+                              - Fn::GetAtt: S3CloudWatchDataSourceLambdaLogGroup.Arn
+              - PolicyDocument:
+                    Version: 2012-10-17
+                    Statement:
+                        - Effect: Allow
+                          Action:
+                              - s3:GetObject
+                          Resource: arn:aws:s3:::*/*
+                        - Effect: Allow
+                          Action:
+                              - s3:GetBucketLocation
+                          Resource: arn:aws:s3:::*
+                PolicyName: LambdaS3Policy
+  S3CloudWatchDataSourceLambdaLogGroup:
+      Type: AWS::Logs::LogGroup
+      Properties:
+          LogGroupName:
+              Fn::Join:
+                  - /
+                  - - /aws/lambda
+                    - Ref: DataSourceName
+          RetentionInDays: 7
+
 Outputs:
   MetricMigrationQueueUrl:
     Description: URL of the Metric Migration Queue

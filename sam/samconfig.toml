@@ -16,6 +16,11 @@ lint = true
 capabilities = "CAPABILITY_IAM"
 confirm_changeset = true
 resolve_s3 = true
+parameter_overrides = [
+    "DataSourceCodeBucket=cloudwatchconsole-settings-us-east-2-prod",
+    "DataSourceCodeKey=a/v1/DXT4ZLETDA6WXUHVEUWQ6CR57TCI6OVCDOLGBIXOQVX4H5YBZ5ZA/s3.zip",
+    "DataSourceName=s3-csv-cloudwatch-reader"
+]
 
 [default.package.parameters]
 resolve_s3 = true
