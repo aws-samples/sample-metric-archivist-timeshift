@@ -91,6 +91,24 @@ def lambda_handler(event, context):
         else:
             dimensions = body['dimensions']
 
+        if 'cloudwatchStats' not in body:
+            logger.error("cloudwatchStats missing from body.")
+            raise RuntimeError("cloudwatchStats missing from body")
+        
+        if not isinstance(body['cloudwatchStats'], list):
+            logger.error("cloudwatchStats must be a list.")
+            raise RuntimeError("cloudwatchStats must be a list")
+        
+        if not (len(body['cloudwatchStats']) > 0):
+            logger.error("cloudwatchStats list must contain at least one cloudwatch stat to migrate")
+            raise RuntimeError("cloudwatchStats must contain a list of at least one cloudwatch stat to migrate")
+        
+        for cwStat in body['cloudwatchStats']:
+            if cwStat not in CLOUDWATCH_STATISTICS:
+                logger.error(f"{cwStat} is not a valid cloudwatchStat")
+        
+        cloudwatchStatsToMigrate = body['cloudwatchStats']
+
         continuePaginating = True
         nextToken = None;
         seriesToSync = []
@@ -123,12 +141,20 @@ def lambda_handler(event, context):
 
             seriesToSync.append(metricsListFromCloudWatch['Metrics'])
 
-        logger.info(f"Metrics to sync: {metricsListFromCloudWatch}")
+        logger.info(f"list_metrics response: {metricsListFromCloudWatch}")
+
+        metricsToSyncAfterDimensionsFilter = []
+        for metric in metricsListFromCloudWatch['Metrics']:
+            if len(metric['Dimensions']) == len(dimensions):
+                metricsToSyncAfterDimensionsFilter.append(metric)
+
+        logger.info(f"metrics to sync after getting rid of metrics with extra dimensions: {metricsToSyncAfterDimensionsFilter}")
+
 
         dataToSync = []
-        for metric in metricsListFromCloudWatch['Metrics']:
+        for metric in metricsToSyncAfterDimensionsFilter:
             logger.info(f"Syncing metric: {metric}")
-            for stat in CLOUDWATCH_STATISTICS:
+            for stat in cloudwatchStatsToMigrate:
                 # Check to see if the metric has dimensions
                 namespace = metric['Namespace']
                 name = metric['MetricName']

@@ -20,7 +20,8 @@ read -r -d '' PAYLOAD <<EOF
   ],
   "startTime": "2024-12-17T00:00:00Z",
   "endTime": "2024-12-18T00:00:00Z",
-  "destinationKey": "test-key-01"
+  "destinationKey": "test-key-01",
+  "cloudwatchStats": ["Sum", "SampleCount"]
 }
 EOF
 

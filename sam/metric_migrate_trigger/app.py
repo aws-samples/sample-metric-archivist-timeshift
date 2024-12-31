@@ -7,9 +7,11 @@ import os
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
+CLOUDWATCH_STATISTICS = ["Average", "Minimum", "Maximum", "Sum", "SampleCount", "IQM", "p99", "tm99", "tc99", "ts99"]
+
 def validate_request(body):
     """Validate the request body"""
-    required_fields = ['namespace', 'metricName', 'dimensions', 'startTime', 'endTime', 'destinationMetricName', 'destinationKey']
+    required_fields = ['namespace', 'metricName', 'dimensions', 'startTime', 'endTime', 'destinationMetricName', 'destinationKey', 'cloudwatchStats']
     
     for field in required_fields:
         if field not in body:
@@ -25,6 +27,18 @@ def validate_request(body):
         datetime.fromisoformat(body['endTime'].replace('Z', '+00:00'))
     except ValueError:
         raise ValueError("Invalid time format. Use ISO 8601 format (e.g., 2024-01-01T00:00:00Z)")
+    
+    # Validate that cloudwatch stats are valid
+
+    if not isinstance(body['cloudwatchStats'], list):
+        raise ValueError("cloudwatchStats must be a list")
+    
+    if len(body['cloudwatchStats']) == 0:
+        raise ValueError(f"cloudwatchStats must include at least one statistic to migrate. Valid stats are {json.dumps(CLOUDWATCH_STATISTICS)}")
+
+    for cwStat in body['cloudwatchStats']:
+        if cwStat not in CLOUDWATCH_STATISTICS:
+            raise ValueError(f"{cwStat} is not a valid cloudwatch stat. Valid stats are {json.dumps(CLOUDWATCH_STATISTICS)}")
 
 def lambda_handler(event, context):
     """
