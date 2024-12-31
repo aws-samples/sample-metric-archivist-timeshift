@@ -9,7 +9,7 @@ logger.setLevel(logging.INFO)
 
 def validate_request(body):
     """Validate the request body"""
-    required_fields = ['namespace', 'metricName', 'dimensions', 'startTime', 'endTime']
+    required_fields = ['namespace', 'metricName', 'dimensions', 'startTime', 'endTime', 'destinationMetricName', 'destinationKey']
     
     for field in required_fields:
         if field not in body:

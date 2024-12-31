@@ -87,6 +87,8 @@ Resources:
             FunctionResponseTypes:
               - ReportBatchItemFailures
       Timeout: 300  # 5 minutes
+      EphemeralStorage:
+        Size: 5120
       MemorySize: 256
       Policies:
         - SQSPollerPolicy:
@@ -106,6 +108,9 @@ Resources:
           - Fn::ImportValue: PrivateSubnetAId
           - Fn::ImportValue: PrivateSubnetBId
           - Fn::ImportValue: PrivateSubnetCId
+      Environment:
+        Variables:
+          ARCHIVED_METRICS_BUCKET_NAME: !Ref ArchivedMetricsS3Bucket
   LambdaSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:

@@ -11,6 +11,7 @@ read -r -d '' PAYLOAD <<EOF
 {
   "namespace": "AWS/Lambda",
   "metricName": "Invocations",
+  "destinationMetricName": "MigrationInvocations",
   "dimensions": [
     {
       "Name": "FunctionName",
@@ -18,7 +19,8 @@ read -r -d '' PAYLOAD <<EOF
     }
   ],
   "startTime": "2024-12-17T00:00:00Z",
-  "endTime": "2024-12-18T00:00:00Z"
+  "endTime": "2024-12-18T00:00:00Z",
+  "destinationKey": "test-key-01"
 }
 EOF
 

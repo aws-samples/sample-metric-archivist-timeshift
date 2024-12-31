@@ -2,12 +2,14 @@ import logging
 import boto3
 import json
 import datetime
+import os
 
 # Set up logging
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 metrics = boto3.client('cloudwatch')
+s3_client = boto3.client('s3')
 
 CLOUDWATCH_STATISTICS = ["Average", "Minimum", "Maximum", "Sum", "SampleCount", "IQM", "p99", "tm99", "tc99", "ts99"]
 
@@ -32,6 +34,24 @@ def lambda_handler(event, context):
             }
         
         metricName = body['metricName']
+
+        if 'destinationMetricName' not in body or body['destinationMetricName'] == '':
+            logger.error("No destination metric name found in body")
+            return {
+                'statusCode': 400, 
+                'message': 'No destination metric name found in body'
+            }
+
+        destinationMetricName = body['destinationMetricName']
+
+        if 'destinationKey' not in body or body['destinationKey'] == '':
+            logger.error("No destination key found in body")
+            return {
+                'statusCode': 400,
+                'message': 'No destination key found in body'
+            }
+        
+        destinationKey = body['destinationKey']
 
         # Check to see if the event does not include a namespace
         if 'namespace' not in body or body['namespace'] == '':
@@ -188,6 +208,52 @@ def lambda_handler(event, context):
             
     print("DATA TO SYNC")
     print(json.dumps(dataToSync, default=str))
+
+    destinationMetrics = []
+    fileHeader = "timestamp,"
+    for queryResult in dataToSync:
+        sourceStatName = queryResult['query']['MetricStat']['Stat']
+        headerEntry = destinationMetricName+'-'+sourceStatName
+        destinationMetrics.append(headerEntry)
+        fileHeader = fileHeader+headerEntry+","
+    
+    fileHeader = fileHeader[:-1]
+
+    timestampKeyedMetrics = {}
+    with open('/tmp/to_upload', 'w') as tempFile:
+        tempFile.write(fileHeader + '\n')
+        for queryResult in dataToSync:
+            sourceStatName = queryResult['query']['MetricStat']['Stat']
+            headerEntry = destinationMetricName+'-'+sourceStatName
+            zipped = zip(queryResult['results']['Timestamps'], queryResult['results']['Values'])
+            for z in zipped:
+                if z[0] not in timestampKeyedMetrics:
+                    timestampKeyedMetrics[z[0]] = {}
+                timestampKeyedMetric = timestampKeyedMetrics[z[0]]
+                timestampKeyedMetric[headerEntry] = z[1]
+        for timestamp, values in timestampKeyedMetrics.items():
+            s = timestamp.isoformat()+","
+            for headerEntry in destinationMetrics:
+                s = s + str(values[headerEntry]) + ","
+            s = s[:-1]
+            tempFile.write(s+'\n')
+
+    try:
+        s3_key = destinationKey
+        s3_client.upload_file(
+            '/tmp/to_upload',
+            os.environ['ARCHIVED_METRICS_BUCKET_NAME'],
+            s3_key
+        )
+        logger.info(f"Successfully uploaded metrics to s3://{os.environ['ARCHIVED_METRICS_BUCKET_NAME']}/{s3_key}")
+
+    except Exception as e:
+        logger.error(f"Error uploading file to S3: {str(e)}")
+        raise
+
+    print("DESTINATION METRICS")
+    print(json.dumps(destinationMetrics))
+
     print("BATCH FAILURES")
     print(json.dumps(batchFailures, default=str))
     return batchFailures
