@@ -205,7 +205,34 @@ Resources:
                   - - /aws/lambda
                     - Ref: DataSourceName
           RetentionInDays: 7
-
+  TimeshiftLambda:
+      Type: AWS::Serverless::Function
+      Properties:
+        Runtime: python3.13
+        Handler: app.lambda_handler
+        CodeUri: timeshift/
+        Description: "Lambda function for time-shifting operations"
+        Tags:
+          "cloudwatch:datasource": "s3-timeshifted"
+        Environment:
+          Variables:
+            S3_CSV_LOADING_LAMBDA_ARN: !GetAtt S3CloudWatchDataSourceLambda.Arn
+        Policies:
+          - Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: 
+                  - lambda:InvokeFunction
+                Resource: !GetAtt S3CloudWatchDataSourceLambda.Arn
+  TimeshiftLambdaPermission:
+      Type: AWS::Lambda::Permission
+      Properties:
+          Action: lambda:InvokeFunction
+          FunctionName:
+              Ref: TimeshiftLambda
+          Principal: lambda.datasource.cloudwatch.amazonaws.com
+          SourceAccount:
+              Ref: AWS::AccountId
 Outputs:
   MetricMigrationQueueUrl:
     Description: URL of the Metric Migration Queue
