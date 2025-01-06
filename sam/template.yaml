@@ -233,6 +233,23 @@ Resources:
           Principal: lambda.datasource.cloudwatch.amazonaws.com
           SourceAccount:
               Ref: AWS::AccountId
+  HelloWorldFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: hello_world/
+      Handler: app.lambda_handler
+      Runtime: python3.13
+      Architectures:
+        - x86_64
+      Events:
+        HelloWorld:
+          Type: Api
+          Properties:
+            Path: /hello
+            Method: get
+      Description: A simple hello world function that includes random sleep time
+      MemorySize: 128
+      Timeout: 60  # Setting 60 seconds timeout due to the random sleep
 Outputs:
   MetricMigrationQueueUrl:
     Description: URL of the Metric Migration Queue

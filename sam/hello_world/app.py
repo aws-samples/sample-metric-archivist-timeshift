@@ -1,4 +1,7 @@
 import json
+import datetime
+import random
+import time
 
 # import requests
 
@@ -33,10 +36,17 @@ def lambda_handler(event, context):
 
     #     raise e
 
+    now = datetime.datetime.now()
+    seconds_after_minute = now.second
+    maxSleep = seconds_after_minute // 3
+
+    toSleep = random.randrange(0,maxSleep)
+    time.sleep(toSleep)
+
     return {
         "statusCode": 200,
         "body": json.dumps({
             "message": "hello world",
-            # "location": ip.text.replace("\n", "")
+            "slept": str(toSleep)
         }),
     }

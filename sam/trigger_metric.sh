@@ -15,13 +15,13 @@ read -r -d '' PAYLOAD <<EOF
   "dimensions": [
     {
       "Name": "FunctionName",
-      "Value": "sam-MigrateMetricFunction-9TbhGLeM4rUl"
+      "Value": "sam-HelloWorldFunction-pQR2ob6Ha7yL"
     }
   ],
-  "startTime": "2024-12-17T00:00:00Z",
-  "endTime": "2024-12-18T00:00:00Z",
-  "destinationKey": "test-key-01",
-  "cloudwatchStats": ["Sum", "SampleCount"]
+  "startTime": "2025-01-03T21:54:00Z",
+  "endTime": "2025-01-03T22:37:00Z",
+  "destinationKey": "helloworld-reference-01",
+  "cloudwatchStats": ["Sum", "Minimum", "Maximum", "Average", "SampleCount"]
 }
 EOF
 
