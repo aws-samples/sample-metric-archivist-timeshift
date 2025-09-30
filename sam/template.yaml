@@ -5,12 +5,6 @@ Description: >
 
   Sample SAM Template for sam
 Parameters:
-    DataSourceCodeBucket:
-        Description: S3 Bucket containing the data source connector code
-        Type: String
-    DataSourceCodeKey:
-        Description: S3 key of the data source connector code
-        Type: String
     DataSourceName:
         Description: Data source name
         Type: String
@@ -133,78 +127,10 @@ Resources:
         Status: Enabled
     UpdateReplacePolicy: Retain
     DeletionPolicy: Retain
-  S3CloudWatchDataSourceLambda:
-      Type: AWS::Lambda::Function
-      Properties:
-          FunctionName:
-              Ref: DataSourceName
-          Runtime: nodejs18.x
-          Handler: index.handler
-          Role:
-              Fn::GetAtt: S3CloudWatchDataSourceLambdaRole.Arn
-          Code:
-              S3Bucket:
-                  Ref: DataSourceCodeBucket
-              S3Key:
-                  Ref: DataSourceCodeKey
-          Timeout: 30
-          Tags:
-              - Key: cloudwatch:datasource
-                Value: s3
-  S3CloudWatchDataSourceLambdaPermission:
-      Type: AWS::Lambda::Permission
-      Properties:
-          Action: lambda:InvokeFunction
-          FunctionName:
-              Ref: S3CloudWatchDataSourceLambda
-          Principal: lambda.datasource.cloudwatch.amazonaws.com
-          SourceAccount:
-              Ref: AWS::AccountId
-  S3CloudWatchDataSourceLambdaRole:
-      Type: AWS::IAM::Role
-      Properties:
-          AssumeRolePolicyDocument:
-              Version: 2012-10-17
-              Statement:
-                  - Action:
-                        - sts:AssumeRole
-                    Effect: Allow
-                    Principal:
-                        Service:
-                            - lambda.amazonaws.com
-          Policies:
-              - PolicyName: LambdaLoggingPolicy
-                PolicyDocument:
-                    Version: 2012-10-17
-                    Statement:
-                        - Action:
-                              - logs:CreateLogGroup
-                              - logs:CreateLogStream
-                              - logs:PutLogEvents
-                          Effect: Allow
-                          Resource:
-                              - Fn::GetAtt: S3CloudWatchDataSourceLambdaLogGroup.Arn
-              - PolicyDocument:
-                    Version: 2012-10-17
-                    Statement:
-                        - Effect: Allow
-                          Action:
-                              - s3:GetObject
-                          Resource: arn:aws:s3:::*/*
-                        - Effect: Allow
-                          Action:
-                              - s3:GetBucketLocation
-                          Resource: arn:aws:s3:::*
-                PolicyName: LambdaS3Policy
-  S3CloudWatchDataSourceLambdaLogGroup:
-      Type: AWS::Logs::LogGroup
-      Properties:
-          LogGroupName:
-              Fn::Join:
-                  - /
-                  - - /aws/lambda
-                    - Ref: DataSourceName
-          RetentionInDays: 7
+
+
+
+
   TimeshiftLambda:
       Type: AWS::Serverless::Function
       Properties:
@@ -214,16 +140,13 @@ Resources:
         Description: "Lambda function for time-shifting operations"
         Tags:
           "cloudwatch:datasource": "s3-timeshifted"
-        Environment:
-          Variables:
-            S3_CSV_LOADING_LAMBDA_ARN: !GetAtt S3CloudWatchDataSourceLambda.Arn
         Policies:
           - Version: '2012-10-17'
             Statement:
               - Effect: Allow
                 Action: 
                   - lambda:InvokeFunction
-                Resource: !GetAtt S3CloudWatchDataSourceLambda.Arn
+                Resource: "*"
   TimeshiftLambdaPermission:
       Type: AWS::Lambda::Permission
       Properties:

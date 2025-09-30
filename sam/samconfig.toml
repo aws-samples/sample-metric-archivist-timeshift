@@ -16,11 +16,11 @@ lint = true
 capabilities = "CAPABILITY_IAM"
 confirm_changeset = true
 resolve_s3 = true
-parameter_overrides = [
-    "DataSourceCodeBucket=cloudwatchconsole-settings-us-east-2-prod",
-    "DataSourceCodeKey=a/v1/DXT4ZLETDA6WXUHVEUWQ6CR57TCI6OVCDOLGBIXOQVX4H5YBZ5ZA/s3.zip",
-    "DataSourceName=s3-csv-cloudwatch-reader"
-]
+parameter_overrides = "DataSourceCodeBucket=\"data-source-code-deploy-us-east-1\" DataSourceCodeKey=\"a/v1/DXT4ZLETDA6WXUHVEUWQ6CR57TCI6OVCDOLGBIXOQVX4H5YBZ5ZA/s3.zip\" DataSourceName=\"s3-csv-cloudwatch-reader\""
+stack_name = "metric-timeshift"
+s3_prefix = "metric-timeshift"
+region = "us-east-1"
+image_repositories = []
 
 [default.package.parameters]
 resolve_s3 = true
@@ -33,3 +33,13 @@ warm_containers = "EAGER"
 
 [default.local_start_lambda.parameters]
 warm_containers = "EAGER"
+
+[metric-timeshift.deploy.parameters]
+stack_name = "metric-timeshift"
+resolve_s3 = true
+s3_prefix = "metric-timeshift"
+region = "us-east-1"
+capabilities = "CAPABILITY_IAM"
+disable_rollback = true
+parameter_overrides = "DataSourceCodeBucket=\"metric-archive-data-source-us-east-1-prod\" DataSourceCodeKey=\"metric-timeshift-s3.zip\" DataSourceName=\"s3-csv-cloudwatch-reader\""
+image_repositories = []

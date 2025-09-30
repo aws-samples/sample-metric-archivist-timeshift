@@ -1,1 +1,0 @@
-{"DataSourceConnectorName":"S3","Description":"Amazon Simple Storage Service","Version":1.1,"ArgumentNames":["BucketName","ObjectKey"],"ArgumentTypes":["String","String"]}
