@@ -14,7 +14,7 @@ lint = true
 
 [default.deploy.parameters]
 capabilities = "CAPABILITY_IAM"
-confirm_changeset = true
+confirm_changeset = false
 resolve_s3 = true
 parameter_overrides = "DataSourceCodeBucket=\"data-source-code-deploy-us-east-1\" DataSourceCodeKey=\"a/v1/DXT4ZLETDA6WXUHVEUWQ6CR57TCI6OVCDOLGBIXOQVX4H5YBZ5ZA/s3.zip\" DataSourceName=\"s3-csv-cloudwatch-reader\""
 stack_name = "metric-timeshift"

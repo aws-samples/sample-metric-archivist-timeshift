@@ -82,5 +82,5 @@ export const options = {
 // about authoring k6 scripts.
 //
 export default function() {
-  http.get('https://mudeglh8ah.execute-api.us-east-2.amazonaws.com/Prod/hello');
+  http.get('https://vx60vk283k.execute-api.us-east-1.amazonaws.com/Prod/hello');
 }

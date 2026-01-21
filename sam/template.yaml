@@ -31,7 +31,7 @@ Resources:
         - x86_64
       Timeout: 20
       Policies:
-        - CloudWatchReadOnlyAccess
+        - CloudWatchFullAccess
         - SQSSendMessagePolicy:
             QueueName: !GetAtt MetricMigrationQueue.QueueName
       Environment:
@@ -127,10 +127,6 @@ Resources:
         Status: Enabled
     UpdateReplacePolicy: Retain
     DeletionPolicy: Retain
-
-
-
-
   TimeshiftLambda:
       Type: AWS::Serverless::Function
       Properties:
@@ -162,17 +158,12 @@ Resources:
       CodeUri: hello_world/
       Handler: app.lambda_handler
       Runtime: python3.13
-      Architectures:
-        - x86_64
       Events:
-        HelloWorld:
+        HelloWorldApi:
           Type: Api
           Properties:
             Path: /hello
             Method: get
-      Description: A simple hello world function that includes random sleep time
-      MemorySize: 128
-      Timeout: 60  # Setting 60 seconds timeout due to the random sleep
 Outputs:
   MetricMigrationQueueUrl:
     Description: URL of the Metric Migration Queue
@@ -183,3 +174,8 @@ Outputs:
   MetricMigrationTriggerApi:
     Description: API Gateway endpoint URL for the metric migration trigger
     Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/migrate"
+  HelloWorldApi:
+    Description: API Gateway endpoint URL for HelloWorld function
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/hello"
+    Export:
+      Name: !Sub "${AWS::StackName}-HelloWorldApiUrl"
