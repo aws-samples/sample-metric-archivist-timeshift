@@ -8,7 +8,12 @@ Parameters:
     DataSourceName:
         Description: Data source name
         Type: String
-
+    S3CsvLoadingLambdaArn:
+        Description: |
+          ARN of the Lambda function that loads CSV data from S3 (created by CloudWatch S3 CSV Data Source setup).
+          To get this ARN, follow the instructions at: https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/CloudWatch-Metrics-Insights-datasources-S3.html
+          After creating the S3 CSV Data Source in CloudWatch, find the Lambda ARN in the CloudWatch console under Data Sources.
+        Type: String
 # More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
 Globals:
   Function:
@@ -46,7 +51,6 @@ Resources:
   MetricMigrationQueue:
     Type: AWS::SQS::Queue
     Properties:
-      QueueName: MetricMigrationQueue
       VisibilityTimeout: 300  # 5 minutes
       MessageRetentionPeriod: 1209600  # 14 days
       # Enable dead-letter queue for failed migrations
@@ -59,7 +63,6 @@ Resources:
   MetricMigrationDLQ:
     Type: AWS::SQS::Queue
     Properties:
-      QueueName: MetricMigrationDLQ
       MessageRetentionPeriod: 1209600  # 14 days
     UpdateReplacePolicy: Retain
     DeletionPolicy: Retain
@@ -95,22 +98,9 @@ Resources:
             Resource: '*'
         - S3CrudPolicy:
             BucketName: !Ref ArchivedMetricsS3Bucket
-      VpcConfig:
-        SecurityGroupIds:
-          - !Ref LambdaSecurityGroup
-        SubnetIds:
-          - Fn::ImportValue: PrivateSubnetAId
-          - Fn::ImportValue: PrivateSubnetBId
-          - Fn::ImportValue: PrivateSubnetCId
       Environment:
         Variables:
           ARCHIVED_METRICS_BUCKET_NAME: !Ref ArchivedMetricsS3Bucket
-  LambdaSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: Security group for Lambda functions
-      VpcId: 
-        Fn::ImportValue: VpcId
   ArchivedMetricsS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -136,6 +126,9 @@ Resources:
         Description: "Lambda function for time-shifting operations"
         Tags:
           "cloudwatch:datasource": "s3-timeshifted"
+        Environment:
+          Variables:
+            S3_CSV_LOADING_LAMBDA_ARN: !Ref S3CsvLoadingLambdaArn
         Policies:
           - Version: '2012-10-17'
             Statement:

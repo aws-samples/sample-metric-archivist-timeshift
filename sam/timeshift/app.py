@@ -4,29 +4,64 @@ import os
 import logging
 import isodate
 
-lambda_client = boto3.client('lambda')
-
-target_lambda = os.environ['S3_CSV_LOADING_LAMBDA_ARN']
-
-# Set up logging
+# Set up logging FIRST before any other operations
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
 
-def lambda_handler(event, context):
-    logging.error(f"Received event {event}")
+logger.info("Timeshift Lambda initializing...")
+logger.info(f"Available environment variables: {list(os.environ.keys())}")
 
-    if 'EventType' not in event:
-        raise RuntimeError("EventType missing from event")
+lambda_client = boto3.client('lambda')
+
+# Check if the required environment variable exists
+if 'S3_CSV_LOADING_LAMBDA_ARN' not in os.environ:
+    logger.error("CRITICAL: S3_CSV_LOADING_LAMBDA_ARN environment variable is not set!")
+    logger.error(f"Available environment variables: {json.dumps(dict(os.environ), indent=2)}")
+    error_msg = """
+    S3_CSV_LOADING_LAMBDA_ARN environment variable is required but not set.
     
-    eventType = event['EventType']
+    This Lambda function requires an S3 CSV Data Source to be configured in CloudWatch.
+    
+    To set this up:
+    1. Follow the instructions at: https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/CloudWatch-Metrics-Insights-datasources-S3.html
+    2. After creating the S3 CSV Data Source, find the Lambda ARN in the CloudWatch console
+    3. Deploy this stack with the S3CsvLoadingLambdaArn parameter set to that ARN
+    
+    Example:
+    sam deploy --parameter-overrides S3CsvLoadingLambdaArn=arn:aws:lambda:us-east-1:123456789012:function:your-s3-csv-function
+    """
+    logger.error(error_msg)
+    raise RuntimeError(error_msg)
 
-    match eventType:
-        case 'GetMetricData':
-            return handleGetMetricData(event, context)
-        case 'DescribeGetMetricData':
-            return handleDescribeGetMetricData(event, context)
-        case _:
-            raise RuntimeError('Invalid EventType')
+target_lambda = os.environ['S3_CSV_LOADING_LAMBDA_ARN']
+logger.info(f"Target Lambda ARN: {target_lambda}")
+
+def lambda_handler(event, context):
+    logger.info("=== Lambda Handler Invoked ===")
+    logger.info(f"Event type: {type(event)}")
+    logger.info(f"Full event: {json.dumps(event, default=str, indent=2)}")
+    logger.info(f"Context: {context}")
+    
+    try:
+        if 'EventType' not in event:
+            logger.error("EventType missing from event")
+            logger.error(f"Event keys present: {list(event.keys())}")
+            raise RuntimeError("EventType missing from event")
+        
+        eventType = event['EventType']
+        logger.info(f"Processing EventType: {eventType}")
+
+        match eventType:
+            case 'GetMetricData':
+                return handleGetMetricData(event, context)
+            case 'DescribeGetMetricData':
+                return handleDescribeGetMetricData(event, context)
+            case _:
+                logger.error(f"Invalid EventType received: {eventType}")
+                raise RuntimeError(f'Invalid EventType: {eventType}')
+    except Exception as e:
+        logger.error(f"Exception in lambda_handler: {str(e)}", exc_info=True)
+        raise
     
 def handleDescribeGetMetricData(event, context):
     description = """
@@ -62,40 +97,100 @@ P1DT1M | one day + one minute
 
 def handleGetMetricData(event, context):
     try:
-        logger.error("Starting handleGetMetricData")
+        logger.info("=== Starting handleGetMetricData ===")
+        logger.info(f"Event structure: {json.dumps(event, default=str, indent=2)}")
+        
+        # Validate event structure
+        if 'GetMetricDataRequest' not in event:
+            logger.error("GetMetricDataRequest missing from event")
+            raise RuntimeError("GetMetricDataRequest missing from event")
+        
+        if 'Arguments' not in event['GetMetricDataRequest']:
+            logger.error("Arguments missing from GetMetricDataRequest")
+            raise RuntimeError("Arguments missing from GetMetricDataRequest")
+        
+        arguments = event['GetMetricDataRequest']['Arguments']
+        logger.info(f"Arguments received: {arguments}")
+        logger.info(f"Number of arguments: {len(arguments)}")
+        
+        if len(arguments) < 3:
+            logger.error(f"Expected at least 3 arguments, got {len(arguments)}")
+            raise RuntimeError(f"Expected at least 3 arguments (bucket, key, duration), got {len(arguments)}")
+        
         # Invoke the S3CloudWatchDataSourceLambda
-        durationString = event['GetMetricDataRequest']['Arguments'][2]
-        logger.info(f"Duration string from event {durationString}")
-        duration = isodate.parse_duration(durationString)
-        logger.info(f"Duration {duration} is type {type(duration)}")
+        durationString = arguments[2]
+        logger.info(f"Duration string from event: {durationString}")
+        
+        try:
+            duration = isodate.parse_duration(durationString)
+            logger.info(f"Parsed duration: {duration} (type: {type(duration)})")
+        except Exception as e:
+            logger.error(f"Failed to parse duration string '{durationString}': {str(e)}")
+            raise RuntimeError(f"Invalid ISO 8601 duration string: {durationString}")
 
+        # Remove the duration argument before passing to target lambda
         del event['GetMetricDataRequest']['Arguments'][2]
         
-        logger.info(f"Event with argument(s) removed {event}")
+        logger.info(f"Event after removing duration argument: {json.dumps(event, default=str, indent=2)}")
+        logger.info(f"Invoking target lambda: {target_lambda}")
+        
         response = lambda_client.invoke(
             FunctionName=target_lambda,
             InvocationType='RequestResponse',  # Synchronous invocation
             Payload=json.dumps(event)  # Pass through the original event, with only the first two arguments
         )
-        logger.error(f"Response from source lambda {response}")
+        logger.info(f"Lambda invoke response status: {response['StatusCode']}")
+        logger.info(f"Response metadata: {json.dumps({k: v for k, v in response.items() if k != 'Payload'}, default=str)}")
+        
     except Exception as e:
-        logger.error(f"Exception while calling source lambda {e}")
+        logger.error(f"Exception while calling source lambda: {str(e)}", exc_info=True)
         return {
             'statusCode': 500,
             'body': f'Error invoking S3CloudWatchDataSourceLambda: {str(e)}'
         }
 
     # Read the response payload
-    response_payload = json.loads(response['Payload'].read().decode('utf-8'))
-    for result in response_payload['MetricDataResults']:
-        origTimestamps = result['Timestamps']
-        newTimestamps = [None] * len(origTimestamps)
-        for i in range(0, len(origTimestamps)):
-            origTime = origTimestamps[i]
-            newTimestamps[i] = int(origTime + duration.total_seconds())
-            logger.error(f"origTime is of class {type(origTime)}")
-        logger.info(f"Swapping timestamps: {origTimestamps} into the shifted {newTimestamps}")
-        result['Timestamps'] = newTimestamps
+    try:
+        payload_bytes = response['Payload'].read()
+        logger.info(f"Payload size: {len(payload_bytes)} bytes")
+        response_payload = json.loads(payload_bytes.decode('utf-8'))
+        logger.info(f"Response payload structure: {json.dumps({k: type(v).__name__ for k, v in response_payload.items()})}")
+    except Exception as e:
+        logger.error(f"Failed to parse response payload: {str(e)}", exc_info=True)
+        raise
+    
+    # Time-shift the timestamps
+    try:
+        if 'MetricDataResults' not in response_payload:
+            logger.error("MetricDataResults missing from response payload")
+            logger.error(f"Response payload keys: {list(response_payload.keys())}")
+            raise RuntimeError("MetricDataResults missing from response")
+        
+        for idx, result in enumerate(response_payload['MetricDataResults']):
+            logger.info(f"Processing result {idx}: {result.get('Id', 'unknown')}")
+            
+            if 'Timestamps' not in result:
+                logger.warning(f"Result {idx} has no Timestamps field")
+                continue
+            
+            origTimestamps = result['Timestamps']
+            logger.info(f"Original timestamps count: {len(origTimestamps)}")
+            
+            newTimestamps = []
+            for i, origTime in enumerate(origTimestamps):
+                logger.debug(f"Original timestamp {i}: {origTime} (type: {type(origTime)})")
+                newTime = int(origTime + duration.total_seconds())
+                newTimestamps.append(newTime)
+                if i < 3:  # Log first 3 for debugging
+                    logger.info(f"Timestamp {i}: {origTime} -> {newTime} (shifted by {duration.total_seconds()}s)")
+            
+            result['Timestamps'] = newTimestamps
+            logger.info(f"Result {idx} timestamps shifted successfully")
 
-    logger.info(f"Returning {response_payload} from handleGetMetricData")
-    return response_payload
+        logger.info("=== handleGetMetricData completed successfully ===")
+        logger.info(f"Returning payload with {len(response_payload.get('MetricDataResults', []))} results")
+        return response_payload
+        
+    except Exception as e:
+        logger.error(f"Exception while processing timestamps: {str(e)}", exc_info=True)
+        raise

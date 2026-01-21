@@ -41,5 +41,5 @@ s3_prefix = "metric-timeshift"
 region = "us-east-1"
 capabilities = "CAPABILITY_IAM"
 disable_rollback = true
-parameter_overrides = "DataSourceCodeBucket=\"metric-archive-data-source-us-east-1-prod\" DataSourceCodeKey=\"metric-timeshift-s3.zip\" DataSourceName=\"s3-csv-cloudwatch-reader\""
+parameter_overrides = "DataSourceCodeBucket=\"metric-archive-data-source-us-east-1-prod\" DataSourceCodeKey=\"metric-timeshift-s3.zip\" DataSourceName=\"s3-csv-cloudwatch-reader\" S3CsvLoadingLambdaArn=\"arn:aws:lambda:us-east-1:138228122321:function:CSVFromS3\""
 image_repositories = []

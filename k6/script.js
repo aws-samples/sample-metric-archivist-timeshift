@@ -81,6 +81,12 @@ export const options = {
 // See https://grafana.com/docs/k6/latest/examples/get-started-with-k6/ to learn more
 // about authoring k6 scripts.
 //
+const API_URL = __ENV.API_URL;
+
+if (!API_URL) {
+  throw new Error('API_URL environment variable is required. Run with: k6 run -e API_URL=https://your-api-url.com k6/script.js');
+}
+
 export default function() {
-  http.get('https://vx60vk283k.execute-api.us-east-1.amazonaws.com/Prod/hello');
+  http.get(API_URL);
 }

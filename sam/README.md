@@ -34,6 +34,16 @@ To use the SAM CLI, you need the following tools.
 * [Python 3 installed](https://www.python.org/downloads/)
 * Docker - [Install Docker community edition](https://hub.docker.com/search/?type=edition&offering=community)
 
+### Prerequisites: S3 CSV Data Source Setup
+
+**IMPORTANT:** Before deploying this application, you must set up an S3 CSV Data Source in CloudWatch to enable the timeshift functionality.
+
+1. Follow the AWS documentation to create an S3 CSV Data Source: [CloudWatch S3 Data Sources](https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/CloudWatch-Metrics-Insights-datasources-S3.html)
+2. After creating the data source, find the Lambda function ARN in the CloudWatch console under **Metrics > Data Sources**
+3. Copy this ARN - you'll need it for the `S3CsvLoadingLambdaArn` parameter during deployment
+
+### Deployment Steps
+
 To build and deploy your application for the first time, run the following in your shell:
 
 ```bash
@@ -45,6 +55,7 @@ The first command will build the source of your application. The second command 
 
 * **Stack Name**: The name of the stack to deploy to CloudFormation. This should be unique to your account and region, and a good starting point would be something matching your project name.
 * **AWS Region**: The AWS region you want to deploy your app to.
+* **S3CsvLoadingLambdaArn**: The ARN of the Lambda function created by the CloudWatch S3 CSV Data Source setup (see Prerequisites above). Example: `arn:aws:lambda:us-east-1:123456789012:function:your-s3-csv-function`
 * **Confirm changes before deploy**: If set to yes, any change sets will be shown to you before execution for manual review. If set to no, the AWS SAM CLI will automatically deploy application changes.
 * **Allow SAM CLI IAM role creation**: Many AWS SAM templates, including this example, create AWS IAM roles required for the AWS Lambda function(s) included to access AWS services. By default, these are scoped down to minimum required permissions. To deploy an AWS CloudFormation stack which creates or modifies IAM roles, the `CAPABILITY_IAM` value for `capabilities` must be provided. If permission isn't provided through this prompt, to deploy this example you must explicitly pass `--capabilities CAPABILITY_IAM` to the `sam deploy` command.
 * **Save arguments to samconfig.toml**: If set to yes, your choices will be saved to a configuration file inside the project, so that in the future you can just re-run `sam deploy` without parameters to deploy changes to your application.
