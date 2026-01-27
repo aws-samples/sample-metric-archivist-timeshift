@@ -94,7 +94,9 @@ Resources:
         - Statement:
           - Effect: Allow
             Action:
-              - cloudwatch:*
+              - cloudwatch:ListMetrics
+              - cloudwatch:GetMetricData
+              - cloudwatch:GetMetricStatistics
             Resource: '*'
         - S3CrudPolicy:
             BucketName: !Ref ArchivedMetricsS3Bucket
@@ -135,7 +137,7 @@ Resources:
               - Effect: Allow
                 Action: 
                   - lambda:InvokeFunction
-                Resource: "*"
+                Resource: !Ref S3CsvLoadingLambdaArn
   TimeshiftLambdaPermission:
       Type: AWS::Lambda::Permission
       Properties:
