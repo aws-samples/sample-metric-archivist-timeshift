@@ -24,10 +24,22 @@ Globals:
       LogFormat: JSON
   Api:
     TracingEnabled: true
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W68
+            reason: "Usage Plan not needed for demo purposes."
+          - id: W69
+            reason: "No Access Logs needed for demo purposes."
 Resources:
   # amazonq-ignore-next-line
   MetricMigrationTrigger:
     Type: AWS::Serverless::Function
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W89
+            reason: "Lambda in VPC unneeded for demo purposes."
     Properties:
       CodeUri: metric_migrate_trigger/
       Handler: app.lambda_handler
@@ -35,6 +47,7 @@ Resources:
       Architectures:
         - x86_64
       Timeout: 20
+      ReservedConcurrentExecutions: 100
       Policies:
         - CloudWatchFullAccess
         - SQSSendMessagePolicy:
@@ -50,6 +63,11 @@ Resources:
             Method: post
   MetricMigrationQueue:
     Type: AWS::SQS::Queue
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W48
+            reason: "Customer Master Keys (CMKs) not needed for demo purposes."
     Properties:
       VisibilityTimeout: 300  # 5 minutes
       MessageRetentionPeriod: 1209600  # 14 days
@@ -62,6 +80,11 @@ Resources:
   # Dead Letter Queue for failed migrations
   MetricMigrationDLQ:
     Type: AWS::SQS::Queue
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W48
+            reason: "Customer Master Keys (CMKs) not needed for demo purposes."
     Properties:
       MessageRetentionPeriod: 1209600  # 14 days
     UpdateReplacePolicy: Retain
@@ -69,6 +92,11 @@ Resources:
   # amazonq-ignore-next-line
   MigrateMetricFunction:
     Type: AWS::Serverless::Function
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W89
+            reason: "Lambda in VPC unneeded for demo purposes."
     Properties:
       CodeUri: migrate_metric/
       Handler: app.lambda_handler
@@ -84,6 +112,7 @@ Resources:
             FunctionResponseTypes:
               - ReportBatchItemFailures
       Timeout: 300  # 5 minutes
+      ReservedConcurrentExecutions: 10
       EphemeralStorage:
         Size: 5120
       MemorySize: 256
@@ -105,6 +134,11 @@ Resources:
           ARCHIVED_METRICS_BUCKET_NAME: !Ref ArchivedMetricsS3Bucket
   ArchivedMetricsS3Bucket:
     Type: AWS::S3::Bucket
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W35
+            reason: "Bucket access logging not needed for demo purposes."
     Properties:
       BucketEncryption:
         ServerSideEncryptionConfiguration:
@@ -121,11 +155,17 @@ Resources:
     DeletionPolicy: Retain
   TimeshiftLambda:
       Type: AWS::Serverless::Function
+      Metadata:
+        cfn_nag:
+          rules_to_suppress:
+            - id: W89
+              reason: "Lambda in VPC unneeded for demo purposes."
       Properties:
         Runtime: python3.13
         Handler: app.lambda_handler
         CodeUri: timeshift/
         Description: "Lambda function for time-shifting operations"
+        ReservedConcurrentExecutions: 50
         Tags:
           "cloudwatch:datasource": "s3-timeshifted"
         Environment:
@@ -149,10 +189,16 @@ Resources:
               Ref: AWS::AccountId
   HelloWorldFunction:
     Type: AWS::Serverless::Function
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W89
+            reason: "Lambda in VPC unneeded for demo purposes."
     Properties:
       CodeUri: hello_world/
       Handler: app.lambda_handler
       Runtime: python3.13
+      ReservedConcurrentExecutions: 500
       Events:
         HelloWorldApi:
           Type: Api
