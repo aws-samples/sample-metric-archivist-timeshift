@@ -1,3 +1,6 @@
+// Copyright 2026 Amazon.com and its affiliates; all rights reserved.
+// This file is Amazon Web Services Content and may not be duplicated or distributed without permission.
+
 import http from 'k6/http';
 import { sleep } from 'k6';
 
