@@ -1,7 +1,11 @@
 import json
 import os
+import sys
 import pytest
-import sam.migrate_metric.app as app
+
+# Add parent directory to path for imports
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../'))
+import migrate_metric.app as app
 
 @pytest.fixture
 def fail_400_events_directory():

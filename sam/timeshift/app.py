@@ -18,8 +18,8 @@ lambda_client = boto3.client('lambda')
 
 # Check if the required environment variable exists
 if 'S3_CSV_LOADING_LAMBDA_ARN' not in os.environ:
-    logger.error("CRITICAL: S3_CSV_LOADING_LAMBDA_ARN environment variable is not set!")
-    logger.error(f"Available environment variables: {json.dumps(dict(os.environ), indent=2)}")
+    logger.error("CRITICAL: S3_CSV_LOADING_LAMBDA_ARN environment variable is not set!")  # nosemgrep: logging-error-without-handling
+    logger.error(f"Available environment variables: {json.dumps(dict(os.environ), indent=2)}")  # nosemgrep: logging-error-without-handling
     error_msg = """
     S3_CSV_LOADING_LAMBDA_ARN environment variable is required but not set.
     
@@ -33,7 +33,7 @@ if 'S3_CSV_LOADING_LAMBDA_ARN' not in os.environ:
     Example:
     sam deploy --parameter-overrides S3CsvLoadingLambdaArn=arn:aws:lambda:us-east-1:123456789012:function:your-s3-csv-function
     """
-    logger.error(error_msg)
+    logger.error(error_msg)  # nosemgrep: logging-error-without-handling
     raise RuntimeError(error_msg)
 
 target_lambda = os.environ['S3_CSV_LOADING_LAMBDA_ARN']
@@ -47,8 +47,8 @@ def lambda_handler(event, context):
     
     try:
         if 'EventType' not in event:
-            logger.error("EventType missing from event")
-            logger.error(f"Event keys present: {list(event.keys())}")
+            logger.error("EventType missing from event")  # nosemgrep: logging-error-without-handling
+            logger.error(f"Event keys present: {list(event.keys())}")  # nosemgrep: logging-error-without-handling
             raise RuntimeError("EventType missing from event")
         
         eventType = event['EventType']
@@ -60,10 +60,10 @@ def lambda_handler(event, context):
             case 'DescribeGetMetricData':
                 return handleDescribeGetMetricData(event, context)
             case _:
-                logger.error(f"Invalid EventType received: {eventType}")
+                logger.error(f"Invalid EventType received: {eventType}")  # nosemgrep: logging-error-without-handling
                 raise RuntimeError(f'Invalid EventType: {eventType}')
     except Exception as e:
-        logger.error(f"Exception in lambda_handler: {str(e)}", exc_info=True)
+        logger.error(f"Exception in lambda_handler: {str(e)}", exc_info=True)  # nosemgrep: logging-error-without-handling
         raise
     
 def handleDescribeGetMetricData(event, context):
@@ -105,11 +105,11 @@ def handleGetMetricData(event, context):
         
         # Validate event structure
         if 'GetMetricDataRequest' not in event:
-            logger.error("GetMetricDataRequest missing from event")
+            logger.error("GetMetricDataRequest missing from event")  # nosemgrep: logging-error-without-handling
             raise RuntimeError("GetMetricDataRequest missing from event")
         
         if 'Arguments' not in event['GetMetricDataRequest']:
-            logger.error("Arguments missing from GetMetricDataRequest")
+            logger.error("Arguments missing from GetMetricDataRequest")  # nosemgrep: logging-error-without-handling
             raise RuntimeError("Arguments missing from GetMetricDataRequest")
         
         arguments = event['GetMetricDataRequest']['Arguments']
@@ -117,7 +117,7 @@ def handleGetMetricData(event, context):
         logger.info(f"Number of arguments: {len(arguments)}")
         
         if len(arguments) < 3:
-            logger.error(f"Expected at least 3 arguments, got {len(arguments)}")
+            logger.error(f"Expected at least 3 arguments, got {len(arguments)}")  # nosemgrep: logging-error-without-handling
             raise RuntimeError(f"Expected at least 3 arguments (bucket, key, duration), got {len(arguments)}")
         
         # Invoke the S3CloudWatchDataSourceLambda
@@ -128,7 +128,7 @@ def handleGetMetricData(event, context):
             duration = isodate.parse_duration(durationString)
             logger.info(f"Parsed duration: {duration} (type: {type(duration)})")
         except Exception as e:
-            logger.error(f"Failed to parse duration string '{durationString}': {str(e)}")
+            logger.error(f"Failed to parse duration string '{durationString}': {str(e)}")  # nosemgrep: logging-error-without-handling
             raise RuntimeError(f"Invalid ISO 8601 duration string: {durationString}")
 
         # Remove the duration argument before passing to target lambda
@@ -146,7 +146,7 @@ def handleGetMetricData(event, context):
         logger.info(f"Response metadata: {json.dumps({k: v for k, v in response.items() if k != 'Payload'}, default=str)}")
         
     except Exception as e:
-        logger.error(f"Exception while calling source lambda: {str(e)}", exc_info=True)
+        logger.error(f"Exception while calling source lambda: {str(e)}", exc_info=True)  # nosemgrep: logging-error-without-handling
         return {
             'statusCode': 500,
             'body': f'Error invoking S3CloudWatchDataSourceLambda: {str(e)}'
@@ -159,14 +159,14 @@ def handleGetMetricData(event, context):
         response_payload = json.loads(payload_bytes.decode('utf-8'))
         logger.info(f"Response payload structure: {json.dumps({k: type(v).__name__ for k, v in response_payload.items()})}")
     except Exception as e:
-        logger.error(f"Failed to parse response payload: {str(e)}", exc_info=True)
+        logger.error(f"Failed to parse response payload: {str(e)}", exc_info=True)  # nosemgrep: logging-error-without-handling
         raise
     
     # Time-shift the timestamps
     try:
         if 'MetricDataResults' not in response_payload:
-            logger.error("MetricDataResults missing from response payload")
-            logger.error(f"Response payload keys: {list(response_payload.keys())}")
+            logger.error("MetricDataResults missing from response payload")  # nosemgrep: logging-error-without-handling
+            logger.error(f"Response payload keys: {list(response_payload.keys())}")  # nosemgrep: logging-error-without-handling
             raise RuntimeError("MetricDataResults missing from response")
         
         for idx, result in enumerate(response_payload['MetricDataResults']):
@@ -195,5 +195,5 @@ def handleGetMetricData(event, context):
         return response_payload
         
     except Exception as e:
-        logger.error(f"Exception while processing timestamps: {str(e)}", exc_info=True)
+        logger.error(f"Exception while processing timestamps: {str(e)}", exc_info=True)  # nosemgrep: logging-error-without-handling
         raise

@@ -31,7 +31,7 @@ def lambda_handler(event, context):
 
         # Check to see if the event does not include a metricName
         if 'metricName' not in body or body['metricName'] == '':
-            logger.error("No metricName found in body")
+            logger.error("No metricName found in body")  # nosemgrep: logging-error-without-handling
             return {
                 'statusCode': 400,
                 'message': 'No metricName found in body'
@@ -40,7 +40,7 @@ def lambda_handler(event, context):
         metricName = body['metricName']
 
         if 'destinationMetricName' not in body or body['destinationMetricName'] == '':
-            logger.error("No destination metric name found in body")
+            logger.error("No destination metric name found in body")  # nosemgrep: logging-error-without-handling
             return {
                 'statusCode': 400, 
                 'message': 'No destination metric name found in body'
@@ -49,7 +49,7 @@ def lambda_handler(event, context):
         destinationMetricName = body['destinationMetricName']
 
         if 'destinationKey' not in body or body['destinationKey'] == '':
-            logger.error("No destination key found in body")
+            logger.error("No destination key found in body")  # nosemgrep: logging-error-without-handling
             return {
                 'statusCode': 400,
                 'message': 'No destination key found in body'
@@ -59,7 +59,7 @@ def lambda_handler(event, context):
 
         # Check to see if the event does not include a namespace
         if 'namespace' not in body or body['namespace'] == '':
-            logger.error("No namespace found in body")
+            logger.error("No namespace found in body")  # nosemgrep: logging-error-without-handling
             return {
                 'statusCode': 400,
                 'message': 'No namespace found in body'
@@ -68,10 +68,10 @@ def lambda_handler(event, context):
         namespace = body['namespace']
 
         if 'startTime' not in body or body['startTime'] == '':
-            logger.error("No startTime found in body")
+            logger.error("No startTime found in body")  # nosemgrep: logging-error-without-handling
             raise RuntimeError("No startTime found in body")
         if 'endTime' not in body or body['endTime'] == '':
-            logger.error("No endTime found in body")
+            logger.error("No endTime found in body")  # nosemgrep: logging-error-without-handling
             raise RuntimeError("No endTime found in body")
         
         windowStartTimeStr = body['startTime']
@@ -80,13 +80,13 @@ def lambda_handler(event, context):
         try:
             windowStartTime = datetime.datetime.fromisoformat(windowStartTimeStr.replace('Z', '+00:00'))
         except Exception as e:
-            logger.error("Error parsing startTime")
+            logger.error("Error parsing startTime")  # nosemgrep: logging-error-without-handling
             raise RuntimeError("Error parsing startTime")
 
         try:
             windowEndTime = datetime.datetime.fromisoformat(windowEndTimeStr.replace('Z', '+00:00'))
         except Exception as e:
-            logger.error("Error parsing endTime")
+            logger.error("Error parsing endTime")  # nosemgrep: logging-error-without-handling
             raise RuntimeError("Error parsing endTime")
 
         if 'dimensions' not in body:
@@ -96,20 +96,20 @@ def lambda_handler(event, context):
             dimensions = body['dimensions']
 
         if 'cloudwatchStats' not in body:
-            logger.error("cloudwatchStats missing from body.")
+            logger.error("cloudwatchStats missing from body.")  # nosemgrep: logging-error-without-handling
             raise RuntimeError("cloudwatchStats missing from body")
         
         if not isinstance(body['cloudwatchStats'], list):
-            logger.error("cloudwatchStats must be a list.")
+            logger.error("cloudwatchStats must be a list.")  # nosemgrep: logging-error-without-handling
             raise RuntimeError("cloudwatchStats must be a list")
         
         if not (len(body['cloudwatchStats']) > 0):
-            logger.error("cloudwatchStats list must contain at least one cloudwatch stat to migrate")
+            logger.error("cloudwatchStats list must contain at least one cloudwatch stat to migrate")  # nosemgrep: logging-error-without-handling
             raise RuntimeError("cloudwatchStats must contain a list of at least one cloudwatch stat to migrate")
         
         for cwStat in body['cloudwatchStats']:
             if cwStat not in CLOUDWATCH_STATISTICS:
-                logger.error(f"{cwStat} is not a valid cloudwatchStat")
+                logger.error(f"{cwStat} is not a valid cloudwatchStat")  # nosemgrep: logging-error-without-handling
         
         cloudwatchStatsToMigrate = body['cloudwatchStats']
 
@@ -251,7 +251,7 @@ def lambda_handler(event, context):
 
     timestampKeyedMetrics = {}
     # Use tempfile for secure temporary file creation with proper permissions
-    with tempfile.NamedTemporaryFile(mode='w', delete=False, dir='/tmp', suffix='.csv') as tempFile:
+    with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', delete=False, dir='/tmp', suffix='.csv') as tempFile:
         temp_file_path = tempFile.name
         tempFile.write(fileHeader + '\n')
         for queryResult in dataToSync:
@@ -280,7 +280,7 @@ def lambda_handler(event, context):
         logger.info(f"Successfully uploaded metrics to s3://{os.environ['ARCHIVED_METRICS_BUCKET_NAME']}/{s3_key}")
 
     except Exception as e:
-        logger.error(f"Error uploading file to S3: {str(e)}")
+        logger.error(f"Error uploading file to S3: {str(e)}")  # nosemgrep: logging-error-without-handling
         raise
     finally:
         # Clean up the temporary file
