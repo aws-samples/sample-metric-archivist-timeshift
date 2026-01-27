@@ -6,6 +6,7 @@ import boto3
 import json
 import datetime
 import os
+import tempfile
 
 # Set up logging
 logger = logging.getLogger()
@@ -249,7 +250,9 @@ def lambda_handler(event, context):
     fileHeader = fileHeader[:-1]
 
     timestampKeyedMetrics = {}
-    with open('/tmp/to_upload', 'w') as tempFile:
+    # Use tempfile for secure temporary file creation with proper permissions
+    with tempfile.NamedTemporaryFile(mode='w', delete=False, dir='/tmp', suffix='.csv') as tempFile:
+        temp_file_path = tempFile.name
         tempFile.write(fileHeader + '\n')
         for queryResult in dataToSync:
             sourceStatName = queryResult['query']['MetricStat']['Stat']
@@ -270,7 +273,7 @@ def lambda_handler(event, context):
     try:
         s3_key = destinationKey
         s3_client.upload_file(
-            '/tmp/to_upload',
+            temp_file_path,
             os.environ['ARCHIVED_METRICS_BUCKET_NAME'],
             s3_key
         )
@@ -279,6 +282,10 @@ def lambda_handler(event, context):
     except Exception as e:
         logger.error(f"Error uploading file to S3: {str(e)}")
         raise
+    finally:
+        # Clean up the temporary file
+        if os.path.exists(temp_file_path):
+            os.unlink(temp_file_path)
 
     print("DESTINATION METRICS")
     print(json.dumps(destinationMetrics))
