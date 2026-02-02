@@ -24,13 +24,18 @@ Globals:
       LogFormat: JSON
   Api:
     TracingEnabled: true
+    AccessLogSetting:
+      DestinationArn: !GetAtt ApiAccessLogGroup.Arn
+      Format: '$context.requestId'
+    MethodSettings:
+      - ResourcePath: "/*"
+        HttpMethod: "*"
+        LoggingLevel: INFO
     Metadata:
       cfn_nag:
         rules_to_suppress:
           - id: W68
             reason: "Usage Plan not needed for demo purposes."
-          - id: W69
-            reason: "No Access Logs needed for demo purposes."
           - id: W64
             reason: "Usage Plan not needed for demo purposes."
       checkov:
@@ -38,6 +43,12 @@ Globals:
           - id: CKV_AWS_76
             comment: "Request validation not needed for demo purposes."
 Resources:
+  # CloudWatch Logs group for API Gateway access logs
+  ApiAccessLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/apigateway/${AWS::StackName}'
+      RetentionInDays: 7
   # Dead Letter Queue for MetricMigrationTrigger failures
   MetricMigrationTriggerDLQ:
     Type: AWS::SQS::Queue
