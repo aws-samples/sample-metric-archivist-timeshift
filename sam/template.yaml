@@ -31,6 +31,8 @@ Globals:
             reason: "Usage Plan not needed for demo purposes."
           - id: W69
             reason: "No Access Logs needed for demo purposes."
+          - id: W64
+            reason: "Usage Plan not needed for demo purposes."
       checkov:
         skip:
           - id: CKV_AWS_76
