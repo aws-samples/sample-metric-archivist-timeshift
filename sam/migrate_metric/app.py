@@ -270,6 +270,7 @@ def lambda_handler(event, context):
                 s = s + str(values[headerEntry]) + ","
             s = s[:-1]
             tempFile.write(s+'\n')
+        tempFile.flush()  # Ensure all data is written to disk before upload
 
     try:
         s3_key = destinationKey
