@@ -31,7 +31,23 @@ Globals:
             reason: "Usage Plan not needed for demo purposes."
           - id: W69
             reason: "No Access Logs needed for demo purposes."
+      checkov:
+        skip:
+          - id: CKV_AWS_76
+            comment: "Request validation not needed for demo purposes."
 Resources:
+  # Dead Letter Queue for MetricMigrationTrigger failures
+  MetricMigrationTriggerDLQ:
+    Type: AWS::SQS::Queue
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W48
+            reason: "Customer Master Keys (CMKs) not needed for demo purposes."
+    Properties:
+      MessageRetentionPeriod: 1209600  # 14 days
+    UpdateReplacePolicy: Retain
+    DeletionPolicy: Retain
   # amazonq-ignore-next-line
   MetricMigrationTrigger:
     Type: AWS::Serverless::Function
@@ -48,10 +64,15 @@ Resources:
         - x86_64
       Timeout: 20
       ReservedConcurrentExecutions: 100
+      DeadLetterQueue:
+        Type: SQS
+        TargetArn: !GetAtt MetricMigrationTriggerDLQ.Arn
       Policies:
         - CloudWatchFullAccess
         - SQSSendMessagePolicy:
             QueueName: !GetAtt MetricMigrationQueue.QueueName
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt MetricMigrationTriggerDLQ.QueueName
       Environment:
         Variables:
           MIGRATION_QUEUE_URL: !Ref MetricMigrationQueue
@@ -79,6 +100,18 @@ Resources:
     DeletionPolicy: Retain
   # Dead Letter Queue for failed migrations
   MetricMigrationDLQ:
+    Type: AWS::SQS::Queue
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W48
+            reason: "Customer Master Keys (CMKs) not needed for demo purposes."
+    Properties:
+      MessageRetentionPeriod: 1209600  # 14 days
+    UpdateReplacePolicy: Retain
+    DeletionPolicy: Retain
+  # Dead Letter Queue for MigrateMetricFunction failures
+  MigrateMetricFunctionDLQ:
     Type: AWS::SQS::Queue
     Metadata:
       cfn_nag:
@@ -118,9 +151,14 @@ Resources:
       EphemeralStorage:
         Size: 5120
       MemorySize: 256
+      DeadLetterQueue:
+        Type: SQS
+        TargetArn: !GetAtt MigrateMetricFunctionDLQ.Arn
       Policies:
         - SQSPollerPolicy:
             QueueName: !GetAtt MetricMigrationQueue.QueueName
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt MigrateMetricFunctionDLQ.QueueName
         - AWSLambdaBasicExecutionRole
         # CloudWatch metrics APIs do not support resource-level permissions
         # These read-only operations are safe with wildcard resource
@@ -159,6 +197,18 @@ Resources:
         Status: Enabled
     UpdateReplacePolicy: Retain
     DeletionPolicy: Retain
+  # Dead Letter Queue for TimeshiftLambda failures
+  TimeshiftLambdaDLQ:
+    Type: AWS::SQS::Queue
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W48
+            reason: "Customer Master Keys (CMKs) not needed for demo purposes."
+    Properties:
+      MessageRetentionPeriod: 1209600  # 14 days
+    UpdateReplacePolicy: Retain
+    DeletionPolicy: Retain
   TimeshiftLambda:
       Type: AWS::Serverless::Function
       Metadata:
@@ -172,12 +222,17 @@ Resources:
         CodeUri: timeshift/
         Description: "Lambda function for time-shifting operations"
         ReservedConcurrentExecutions: 50
+        DeadLetterQueue:
+          Type: SQS
+          TargetArn: !GetAtt TimeshiftLambdaDLQ.Arn
         Tags:
           "cloudwatch:datasource": "s3-timeshifted"
         Environment:
           Variables:
             S3_CSV_LOADING_LAMBDA_ARN: !Ref S3CsvLoadingLambdaArn
         Policies:
+          - SQSSendMessagePolicy:
+              QueueName: !GetAtt TimeshiftLambdaDLQ.QueueName
           - Version: '2012-10-17'
             Statement:
               - Effect: Allow
@@ -193,6 +248,18 @@ Resources:
           Principal: lambda.datasource.cloudwatch.amazonaws.com
           SourceAccount:
               Ref: AWS::AccountId
+  # Dead Letter Queue for HelloWorldFunction failures
+  HelloWorldFunctionDLQ:
+    Type: AWS::SQS::Queue
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W48
+            reason: "Customer Master Keys (CMKs) not needed for demo purposes."
+    Properties:
+      MessageRetentionPeriod: 1209600  # 14 days
+    UpdateReplacePolicy: Retain
+    DeletionPolicy: Retain
   HelloWorldFunction:
     Type: AWS::Serverless::Function
     Metadata:
@@ -205,6 +272,12 @@ Resources:
       Handler: app.lambda_handler
       Runtime: python3.13
       ReservedConcurrentExecutions: 500
+      DeadLetterQueue:
+        Type: SQS
+        TargetArn: !GetAtt HelloWorldFunctionDLQ.Arn
+      Policies:
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt HelloWorldFunctionDLQ.QueueName
       Events:
         HelloWorldApi:
           Type: Api
