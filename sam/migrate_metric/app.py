@@ -253,7 +253,7 @@ def lambda_handler(event, context):
     # Use tempfile for secure temporary file creation with proper permissions
     # Safe in Lambda: isolated container with ephemeral /tmp, secure file permissions (0600), proper cleanup in finally block
     with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', delete=False, dir='/tmp', suffix='.csv') as tempFile:  # nosec B108
-        temp_file_path = tempFile.name
+        temp_file_path = tempFile.name  # nosemgrep: tempfile-without-flush - File is flushed before context exit and used after
         tempFile.write(fileHeader + '\n')
         for queryResult in dataToSync:
             sourceStatName = queryResult['query']['MetricStat']['Stat']
