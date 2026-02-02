@@ -62,6 +62,8 @@ Resources:
         rules_to_suppress:
           - id: W89
             reason: "Lambda in VPC unneeded for demo purposes."
+          - id: W64
+            reason: "Usage Plan not needed for demo purposes."
       checkov:
         skip:
           - id: CKV_AWS_117
@@ -315,6 +317,8 @@ Resources:
         rules_to_suppress:
           - id: W89
             reason: "Lambda in VPC unneeded for demo purposes."
+          - id: W64
+            reason: "Usage Plan not needed for demo purposes."
       checkov:
         skip:
           - id: CKV_AWS_117
