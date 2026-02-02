@@ -1,3 +1,3 @@
 # Gitleaks ignore file
 # False positive: "destinationKey" in test fixture is not a secret, flagged as generic-api-key
-fe7611b39744f829e8fd6c3eaaa31afb94081acc:sam/tests/unit/events/success/basic-01.json:12
+fe7611b39744f829e8fd6c3eaaa31afb94081acc:sam/tests/unit/events/success/basic-01.json:generic-api-key:12
