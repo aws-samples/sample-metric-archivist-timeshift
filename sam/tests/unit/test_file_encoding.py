@@ -104,7 +104,7 @@ def test_csv_file_creation_with_ascii_data(mock_cloudwatch_client, mock_s3_clien
         
         assert bucket_name == 'test-bucket'
         assert s3_key == 'test-output.csv'
-        assert temp_file_path.startswith('/tmp/')
+        assert temp_file_path.startswith('/tmp/')  # nosec B108
         assert temp_file_path.endswith('.csv')
 
 
