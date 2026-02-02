@@ -97,6 +97,8 @@ Resources:
         rules_to_suppress:
           - id: W89
             reason: "Lambda in VPC unneeded for demo purposes."
+          - id: W11
+            reason: "CloudWatch ListMetrics, GetMetricData, and GetMetricStatistics do not support resource-level permissions. Wildcard is required and safe as these are read-only operations scoped to the account."
     Properties:
       CodeUri: migrate_metric/
       Handler: app.lambda_handler
@@ -120,6 +122,8 @@ Resources:
         - SQSPollerPolicy:
             QueueName: !GetAtt MetricMigrationQueue.QueueName
         - AWSLambdaBasicExecutionRole
+        # CloudWatch metrics APIs do not support resource-level permissions
+        # These read-only operations are safe with wildcard resource
         - Statement:
           - Effect: Allow
             Action:
@@ -139,6 +143,8 @@ Resources:
         rules_to_suppress:
           - id: W35
             reason: "Bucket access logging not needed for demo purposes."
+          - id: W51
+            reason: "Bucket policy not needed for demo purposes."
     Properties:
       BucketEncryption:
         ServerSideEncryptionConfiguration:
@@ -205,6 +211,17 @@ Resources:
           Properties:
             Path: /hello
             Method: get
+  ServerlessRestApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W68
+            reason: "Usage Plan not needed for demo purposes."
+          - id: W69
+            reason: "Access Logs not needed for demo purposes."
+          - id: W64
+            reason: "Usage Plan not needed for demo purposes."
 Outputs:
   MetricMigrationQueueUrl:
     Description: URL of the Metric Migration Queue
