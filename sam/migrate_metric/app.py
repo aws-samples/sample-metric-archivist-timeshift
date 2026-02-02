@@ -251,7 +251,8 @@ def lambda_handler(event, context):
 
     timestampKeyedMetrics = {}
     # Use tempfile for secure temporary file creation with proper permissions
-    with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', delete=False, dir='/tmp', suffix='.csv') as tempFile:
+    # Safe in Lambda: isolated container with ephemeral /tmp, secure file permissions (0600), proper cleanup in finally block
+    with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', delete=False, dir='/tmp', suffix='.csv') as tempFile:  # nosec B108
         temp_file_path = tempFile.name
         tempFile.write(fileHeader + '\n')
         for queryResult in dataToSync:

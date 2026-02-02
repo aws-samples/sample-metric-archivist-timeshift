@@ -154,7 +154,8 @@ def test_csv_file_with_special_characters():
     
     test_data = "Test with special chars: café, naïve, 日本語"
     
-    with tempfile.NamedTemporaryFile(mode='w', delete=False, dir='/tmp', suffix='.csv') as f:
+    # Safe in test: isolated test environment, secure file permissions (0600), proper cleanup in finally block
+    with tempfile.NamedTemporaryFile(mode='w', delete=False, dir='/tmp', suffix='.csv') as f:  # nosec B108
         temp_path = f.name
         try:
             # This may fail on some systems without explicit encoding
