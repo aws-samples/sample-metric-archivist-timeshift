@@ -31,17 +31,8 @@ Globals:
       - ResourcePath: "/*"
         HttpMethod: "*"
         LoggingLevel: INFO
-    Metadata:
-      cfn_nag:
-        rules_to_suppress:
-          - id: W68
-            reason: "Usage Plan not needed for demo purposes."
-          - id: W64
-            reason: "Usage Plan not needed for demo purposes."
-      checkov:
-        skip:
-          - id: CKV_AWS_76
-            comment: "Request validation not needed for demo purposes."
+    Auth:
+      ApiKeyRequired: true
 Resources:
   # CloudWatch Logs group for API Gateway access logs
   ApiAccessLogGroup:
@@ -73,8 +64,6 @@ Resources:
         rules_to_suppress:
           - id: W89
             reason: "Lambda in VPC unneeded for demo purposes."
-          - id: W64
-            reason: "Usage Plan not needed for demo purposes."
       checkov:
         skip:
           - id: CKV_AWS_117
@@ -328,8 +317,6 @@ Resources:
         rules_to_suppress:
           - id: W89
             reason: "Lambda in VPC unneeded for demo purposes."
-          - id: W64
-            reason: "Usage Plan not needed for demo purposes."
       checkov:
         skip:
           - id: CKV_AWS_117
@@ -353,15 +340,39 @@ Resources:
             Method: get
   ServerlessRestApiDeployment:
     Type: AWS::ApiGateway::Deployment
-    Metadata:
-      cfn_nag:
-        rules_to_suppress:
-          - id: W68
-            reason: "Usage Plan not needed for demo purposes."
-          - id: W69
-            reason: "Access Logs not needed for demo purposes."
-          - id: W64
-            reason: "Usage Plan not needed for demo purposes."
+    Properties:
+      RestApiId: !Ref ServerlessRestApi
+      Description: !Sub "Deployment for ${AWS::StackName}"
+  
+  # API Key and Usage Plan Resources
+  ApiKey:
+    Type: AWS::ApiGateway::ApiKey
+    DependsOn: ServerlessRestApiProdStage
+    Properties:
+      Name: !Sub "${AWS::StackName}-api-key"
+      Enabled: true
+  
+  UsagePlan:
+    Type: AWS::ApiGateway::UsagePlan
+    DependsOn: ServerlessRestApiProdStage
+    Properties:
+      UsagePlanName: !Sub "${AWS::StackName}-usage-plan"
+      ApiStages:
+        - ApiId: !Ref ServerlessRestApi
+          Stage: Prod
+      Quota:
+        Limit: 10000
+        Period: DAY
+      Throttle:
+        BurstLimit: 200
+        RateLimit: 100
+  
+  UsagePlanKey:
+    Type: AWS::ApiGateway::UsagePlanKey
+    Properties:
+      KeyId: !Ref ApiKey
+      KeyType: API_KEY
+      UsagePlanId: !Ref UsagePlan
 Outputs:
   MetricMigrationQueueUrl:
     Description: URL of the Metric Migration Queue
@@ -377,3 +388,9 @@ Outputs:
     Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/hello"
     Export:
       Name: !Sub "${AWS::StackName}-HelloWorldApiUrl"
+  ApiKeyId:
+    Description: API Key ID (use AWS CLI to get the actual key value)
+    Value: !Ref ApiKey
+  GetApiKeyCommand:
+    Description: Command to retrieve your API key
+    Value: !Sub "aws apigateway get-api-key --api-key ${ApiKey} --include-value --query 'value' --output text"

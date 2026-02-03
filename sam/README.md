@@ -44,6 +44,37 @@ To use the SAM CLI, you need the following tools.
 
 ### Deployment Steps
 
+**IMPORTANT: API Gateway CloudWatch Logs Setup**
+
+Before deploying for the first time, you must configure API Gateway to use CloudWatch Logs. This is a one-time setup per AWS account/region:
+
+```bash
+# Get your account ID
+ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+
+# Create the IAM role for API Gateway logging (if it doesn't exist)
+aws iam get-role --role-name APIGatewayCloudWatchLogsRole 2>/dev/null || \
+aws iam create-role --role-name APIGatewayCloudWatchLogsRole \
+  --assume-role-policy-document '{
+    "Version": "2012-10-17",
+    "Statement": [{
+      "Effect": "Allow",
+      "Principal": {"Service": "apigateway.amazonaws.com"},
+      "Action": "sts:AssumeRole"
+    }]
+  }'
+
+# Attach the managed policy for CloudWatch Logs
+aws iam attach-role-policy --role-name APIGatewayCloudWatchLogsRole \
+  --policy-arn arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs
+
+# Set the CloudWatch Logs role ARN in API Gateway account settings
+aws apigateway update-account --patch-operations \
+  op=replace,path=/cloudwatchRoleArn,value=arn:aws:iam::${ACCOUNT_ID}:role/APIGatewayCloudWatchLogsRole
+```
+
+If you skip this step, deployment will fail with: `CloudWatch Logs role ARN must be set in account settings to enable logging`
+
 To build and deploy your application for the first time, run the following in your shell:
 
 ```bash

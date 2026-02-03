@@ -85,11 +85,22 @@ export const options = {
 // about authoring k6 scripts.
 //
 const API_URL = __ENV.API_URL;
+const API_KEY = __ENV.API_KEY;
 
 if (!API_URL) {
-  throw new Error('API_URL environment variable is required. Run with: k6 run -e API_URL=https://your-api-url.com k6/script.js');
+  throw new Error('API_URL environment variable is required. Run with: k6 run -e API_URL=https://your-api-url.com -e API_KEY=your-key k6/script.js');
+}
+
+if (!API_KEY) {
+  throw new Error('API_KEY environment variable is required. Run with: k6 run -e API_URL=https://your-api-url.com -e API_KEY=your-key k6/script.js');
 }
 
 export default function() {
-  http.get(API_URL);
+  const params = {
+    headers: {
+      'x-api-key': API_KEY,
+    },
+  };
+  
+  http.get(API_URL, params);
 }

@@ -72,14 +72,44 @@ if [ -z "$API_URL" ] || [ "$API_URL" == "None" ]; then
 fi
 
 echo -e "${GREEN}✓ Found API URL: $API_URL${NC}"
+
+# Get the API Key
+echo -e "${YELLOW}Retrieving API Key...${NC}"
+API_KEY_ID=$(aws cloudformation describe-stacks \
+    --stack-name "$STACK_NAME" \
+    --region "$REGION" \
+    --query 'Stacks[0].Outputs[?OutputKey==`ApiKeyId`].OutputValue' \
+    --output text)
+
+if [ -z "$API_KEY_ID" ] || [ "$API_KEY_ID" == "None" ]; then
+    echo -e "${RED}Error: Could not find ApiKeyId output in stack${NC}"
+    exit 1
+fi
+
+API_KEY=$(aws apigateway get-api-key \
+    --api-key "$API_KEY_ID" \
+    --include-value \
+    --region "$REGION" \
+    --query 'value' \
+    --output text)
+
+if [ -z "$API_KEY" ]; then
+    echo -e "${RED}Error: Could not retrieve API key value${NC}"
+    exit 1
+fi
+
+echo -e "${GREEN}✓ Found API Key: ${API_KEY:0:8}...${NC}"
 echo ""
 
 # Verify the API is accessible
 echo -e "${YELLOW}Testing API endpoint...${NC}"
-HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$API_URL" || echo "000")
+HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -H "x-api-key: $API_KEY" "$API_URL" || echo "000")
 
 if [ "$HTTP_CODE" == "200" ]; then
     echo -e "${GREEN}✓ API is accessible (HTTP $HTTP_CODE)${NC}"
+elif [ "$HTTP_CODE" == "403" ]; then
+    echo -e "${RED}⚠ Warning: API returned HTTP 403 (Forbidden)${NC}"
+    echo "This might indicate an API key issue. Continuing anyway..."
 elif [ "$HTTP_CODE" == "000" ]; then
     echo -e "${RED}⚠ Warning: Could not reach API endpoint${NC}"
     echo "This might be a network issue. Continuing anyway..."
@@ -91,10 +121,10 @@ echo ""
 
 # Run k6 test
 echo -e "${GREEN}=== Starting K6 Load Test ===${NC}"
-echo "Command: k6 run -e API_URL=$API_URL k6/script.js"
+echo "Command: k6 run -e API_URL=$API_URL -e API_KEY=****** k6/script.js"
 echo ""
 
-k6 run -e API_URL="$API_URL" k6/script.js
+k6 run -e API_URL="$API_URL" -e API_KEY="$API_KEY" k6/script.js
 
 echo ""
 echo -e "${GREEN}=== Test Complete ===${NC}"
