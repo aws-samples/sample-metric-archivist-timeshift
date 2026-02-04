@@ -2,6 +2,9 @@
 
 A serverless AWS application that migrates CloudWatch metrics to S3 for long-term archival and cost optimization, with support for time-shifted data visualization through a custom CloudWatch data source.
 
+## This is a sample!
+This is sample code and should not be assumed to be ready for production. Users should review and examine this code before deploying to a non-production environment for testing. This code is not presumed to meet any set of concrete requirements and users are responsible for adjusting this to their own requirements and needs.
+
 ## Overview
 
 CloudWatch metric storage can be expensive for long-term retention. This system archives older metrics to cheaper S3 storage while maintaining access to historical data through a custom CloudWatch data source connector that supports time-shifting capabilities.
